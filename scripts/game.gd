@@ -27,7 +27,19 @@ const C_ORANGE := Color("#ff9f43")
 const C_BLUE := Color("#4dabf7")
 const C_SHOT := Color("#ffb347")
 const DIFF_COLOR := {"easy": Color("#2ed573"), "medium": Color("#4dabf7"), "hard": Color("#ff9f43"),
-	"master": Color("#ff4d6d"), "god": Color("#ffd166")}
+	"master": Color("#ff3df2"), "god": Color("#ffd166")}
+# Neon wall colours. Kept away from the spike red so hazards always stand out.
+const NEON_BY_DIFF := {"easy": Color("#39ff88"), "medium": Color("#22c8ff"), "hard": Color("#ff9f2e"),
+	"master": Color("#ff3df2"), "god": Color("#ffd447")}
+const NEON_BY_WORLD := [
+	"#22e6ff","#22e6ff","#22e6ff","#22e6ff","#22e6ff",    # basics: cyan
+	"#ff3df2","#ff3df2","#ff3df2",                        # swing: magenta
+	"#9d6bff","#9d6bff","#9d6bff",                        # phase: violet
+	"#ffd447",                                            # finale: gold
+	"#ff9f2e","#ff9f2e",                                  # teleport: orange
+	"#3d7bff","#3d7bff",                                  # gravity: electric blue
+	"#b6ff3b",                                            # moving spikes: lime
+	"#22e6ff","#ff3df2","#b6ff3b","#ff9f2e","#9d6bff","#3d7bff","#ffd447"]  # combos: a new colour each level
 const GROUP_COLOR := ["#e8ecff","#e8ecff","#e8ecff","#e8ecff","#e8ecff","#ff6b6b","#ff6b6b","#ff6b6b",
 	"#b388ff","#b388ff","#b388ff","#ffd166","#ff9f43","#ff9f43","#4dabf7","#4dabf7","#ff4d6d",
 	"#2ed573","#2ed573","#2ed573","#2ed573","#2ed573","#2ed573","#2ed573"]
@@ -38,6 +50,7 @@ var li := 0
 var view := "play"            # "play" | "menu"
 var diff := "medium"
 var aim_mode := "go"          # "go" = point where you want to fly, "fire" = point where the blast goes
+var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
 var aim := Vector2(W / 2, H / 2)
 var deaths := 0
 var rec: Array = []           # this attempt's path, for the ghost
@@ -57,7 +70,7 @@ var ui_alpha := 1.0          # HUD fades when the goal or the ball is underneath
 
 var font: SystemFont
 var font_bold: SystemFont
-var sfx: Sfx
+var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
 
 func _ready() -> void:
@@ -82,12 +95,13 @@ func _load_save() -> void:
 		best = parsed.get("best", {})
 		if parsed.get("diff", "") in DIFFS: diff = parsed.diff
 		if parsed.get("aim", "") in ["go", "fire"]: aim_mode = parsed.aim
+		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 
 
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -124,6 +138,15 @@ func set_diff(dname: String) -> void:
 	_save()
 
 
+func toggle_neon() -> void:
+	neon_mode = "world" if neon_mode == "difficulty" else "difficulty"
+	_save()
+
+
+func neon() -> Color:
+	return Color(NEON_BY_WORLD[li]) if neon_mode == "world" else NEON_BY_DIFF[diff]
+
+
 func toggle_aim() -> void:
 	aim_mode = "fire" if aim_mode == "go" else "go"
 	_save()
@@ -154,6 +177,7 @@ const BTN_LEVELS := Rect2(W / 2 - 65, 330, 130, 44)
 const BTN_NEXT := Rect2(W / 2 + 85, 330, 130, 44)
 const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const AIM_BOX := Rect2(770, 26, 170, 30)
+const NEON_BOX := Rect2(20, 26, 200, 30)
 
 func menu_box(i: int) -> Rect2: return Rect2(85 + (i % 6) * 135, 178 + (i / 6) * 80, 120, 68)
 func diff_box(i: int) -> Rect2: return Rect2(140 + i * 140, 78, 128, 34)
@@ -179,6 +203,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_B: if not one_life(): load_level(li - 1)
 			KEY_L, KEY_ESCAPE: view = "play" if view == "menu" else "menu"
 			KEY_M: toggle_aim()
+			KEY_T: toggle_neon()
 	elif e is InputEventJoypadButton and e.pressed:
 		using_pad = true
 		_pad_button(e.button_index)
@@ -225,6 +250,7 @@ func _pad_aim() -> void:
 func press() -> void:
 	if view == "menu":
 		if hit(AIM_BOX): toggle_aim(); return
+		if hit(NEON_BOX): toggle_neon(); return
 		for i in DIFFS.size():
 			if hit(diff_box(i)): set_diff(DIFFS[i]); return
 		for i in level_total():
@@ -340,6 +366,14 @@ func glow(pos: Vector2, r: float, c: Color, strength := 1.0) -> void:
 		draw_circle(pos, r + 3.0 + k * 4.0, Color(c, 0.10 * strength / (k + 1)))
 
 
+## Glowing tube outline: soft wide halo, brighter inner band, near-white core line.
+func neon_outline(r: Rect2, c: Color, a := 1.0) -> void:
+	draw_rect(r, Color(c, 0.05 * a), false, 12.0)
+	draw_rect(r, Color(c, 0.12 * a), false, 7.0)
+	draw_rect(r, Color(c, 0.45 * a), false, 3.5)
+	draw_rect(r, Color(c.lightened(0.55), 0.95 * a), false, 1.5)
+
+
 func dashed_circle(pos: Vector2, r: float, c: Color) -> void:
 	var n := 48
 	for i in n:
@@ -387,16 +421,23 @@ func _draw_world() -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	var p := Vector2(sim.px, sim.py)
 
-	for x in range(0, int(W), 40): draw_line(Vector2(x, 0), Vector2(x, H), Color(1, 1, 1, 0.03))
-	for y in range(0, int(H), 40): draw_line(Vector2(0, y), Vector2(W, y), Color(1, 1, 1, 0.03))
+	var nc := neon()
+	var breathe := 0.88 + 0.12 * sin(now * 2.2)   # slow neon "hum"
+	for x in range(0, int(W), 40): draw_line(Vector2(x, 0), Vector2(x, H), Color(nc, 0.035))
+	for y in range(0, int(H), 40): draw_line(Vector2(0, y), Vector2(W, y), Color(nc, 0.035))
 
-	for b in data.border: draw_rect(rect_of(b), C_WALL)
-	var wall_a := 0.3 if sim.phased else 1.0
+	# outer frame: dark border, neon line along the inside edge
+	for b in data.border: draw_rect(rect_of(b), Color("#07080c"))
+	neon_outline(Rect2(20, 20, W - 40, H - 40), nc, breathe)
+	# interior walls: dark fill + neon outline (ghostly and dashed while phased)
 	for b in L.get("s", []):
 		var r := rect_of(b)
-		draw_rect(r, Color(C_WALL, wall_a))
-		draw_rect(Rect2(r.position, Vector2(r.size.x, 2)), Color(C_WALL_TOP, wall_a))
-		if sim.phased: dashed_rect(r, C_PURPLE)
+		if sim.phased:
+			draw_rect(r, Color(nc.darkened(0.85), 0.25))
+			dashed_rect(r, C_PURPLE)
+		else:
+			draw_rect(r, nc.darkened(0.86))
+			neon_outline(r, nc, breathe)
 
 	# spikes
 	for k in L.get("k", []):
@@ -419,6 +460,7 @@ func _draw_world() -> void:
 				j += 10
 		else:
 			var r := rect_of(k)
+			draw_rect(r.grow(3), Color(C_SPIKE, 0.10))
 			var up := r.position.y >= 60
 			if r.size.x >= r.size.y:
 				var n := maxi(1, roundi(r.size.x / 16.0))
@@ -496,11 +538,11 @@ func _draw_world() -> void:
 
 	# Easy: preview where this shot would take you
 	if sim.d.get("preview", false) and not sim.done and view == "play" and sim.ammo > 0:
-		var ghost_sim := sim.clone()
+		var ghost_sim = sim.clone()
 		var dir := fire_dir()
 		if ghost_sim.fire(dir.x, dir.y):
 			for f in 75:
-				var res := ghost_sim.tick()
+				var res: String = ghost_sim.tick()
 				if f % 3 == 0:
 					draw_circle(Vector2(ghost_sim.px, ghost_sim.py), 2.5, Color(C_SHOT, 0.5 * (1.0 - f / 75.0)))
 				if res == "dead":
@@ -556,7 +598,7 @@ func _draw_hud() -> void:
 			tip = "Click where you want to fly. The blast fires the opposite way." if aim_mode == "go" else "Click BELOW you to launch up. You fly away from where you fire."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  aim: %s (M to switch)  ·  R restart  ·  N / B  ·  L levels" % ("where you go" if aim_mode == "go" else "where you fire")
+			"click / tap / space = fire  ·  aim: %s (M)  ·  T neon colour  ·  R restart  ·  N / B  ·  L levels" % ("where you go" if aim_mode == "go" else "where you fire")
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
@@ -588,6 +630,8 @@ func _draw_done() -> void:
 func _draw_menu() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.92))
 	text("Levels", W / 2, 60, 28, C_TEXT, "c", true)
+	draw_rect(NEON_BOX, C_PANEL_HI if hit(NEON_BOX) else C_PANEL)
+	text("Neon: by %s ⇄" % neon_mode, NEON_BOX.get_center().x, NEON_BOX.position.y + 20, 13, neon(), "c", true)
 	draw_rect(AIM_BOX, C_PANEL_HI if hit(AIM_BOX) else C_PANEL)
 	text("Aim: %s ⇄" % ("where you go" if aim_mode == "go" else "where you fire"), AIM_BOX.get_center().x, AIM_BOX.position.y + 20, 13, C_SHOT, "c", true)
 	for i in DIFFS.size():

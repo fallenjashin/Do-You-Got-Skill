@@ -22,6 +22,7 @@ the same frame, with the same shot count, within 0.0000000000005 px.
 | Next / previous level | N / B | — |
 | Level select | L or Esc, or the "☰ Levels" button | Start |
 | Switch aim style | M (or the button on the level screen) | — |
+| Neon wall colour: by difficulty / by world | T (or the button on the level screen) | — |
 | Level screen | click a difficulty, then a level | LB/RB difficulty, D-pad pick, A play |
 
 ## Mechanics
@@ -45,7 +46,7 @@ scripts/game.gd           ← input, drawing, menus, difficulties, God Mode, sav
 scripts/sfx.gd            ← placeholder beeps synthesised in code
 scenes/main.tscn          ← the one scene
 tests/test_parity.gd      ← proves sim.gd matches the prototype exactly
-tests/test_game.gd        ← plays the real game: aiming, menus, God Mode, controller, saving
+tests/test_game.gd        ← plays the real game: aiming, menus, God Mode, controller, neon, saving
 tests/golden_runs.json    ← the 288 recorded reference runs
 tools/prototype/          ← the original browser prototype (open recoil.html in a browser)
 tools/bot/                ← the level-testing bots (need Node.js)

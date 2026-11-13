@@ -273,8 +273,8 @@ func tick() -> String:
 
 
 ## Deep copy (used by Easy mode's trajectory preview).
-func clone() -> RecoilSim:
-	var c := RecoilSim.new(level_index, diff)
+func clone() -> RefCounted:
+	var c = get_script().new(level_index, diff)  # works even before Godot builds its class index
 	for prop in ["px", "py", "vx", "vy", "ammo", "grounded", "phased", "phase_cd", "g", "grav_cd",
 			"t", "shots", "started", "done", "dead", "lock_warn"]:
 		c.set(prop, get(prop))

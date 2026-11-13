@@ -88,6 +88,15 @@ func _initialize() -> void:
 	game._pad_button(JOY_BUTTON_A)
 	check(game.sim.shots == 1, "A fires")
 
+	# neon wall colour: follows difficulty by default, or the level's world
+	game.neon_mode = "difficulty"; game.set_diff("master"); game.load_level(0)
+	check(game.neon() == game.NEON_BY_DIFF["master"], "neon walls follow difficulty")
+	game.toggle_neon(); game.load_level(16)
+	check(game.neon_mode == "world" and game.neon() == Color(game.NEON_BY_WORLD[16]), "T switches neon to per-world colours")
+	game.view = "menu"; game.aim = game.NEON_BOX.get_center(); game.press()
+	check(game.neon_mode == "difficulty", "level-screen button switches it back")
+	var saved = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
+	check(saved.get("neon", "") == "difficulty", "neon choice is saved")
 	check(FileAccess.file_exists("user://test_save.json"), "progress saved to disk")
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()
