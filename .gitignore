@@ -1,0 +1,13 @@
+# Godot 4 cache / imports (regenerated automatically)
+.godot/
+*.translation
+# Exports
+build/
+export/
+*.exe
+*.pck
+*.x86_64
+# OS / editor
+.DS_Store
+Thumbs.db
+node_modules/
