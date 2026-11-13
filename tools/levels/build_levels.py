@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Builds data/levels.json: 10 worlds x 5 levels + 10 finals.
+
+Play area is 960x540 with a 20 px outer wall, so the usable space is x 20..940, y 20..520.
+The ball has radius 11. One shot from rest lifts you ~113 px; two shots ~226 px.
+
+Level keys (all optional except name/tip/start/goal/ammo):
+  s    walls            [x, y, w, h]
+  k    spikes           [x, y, w, h]  or moving  [x, y, w, h, dx, dy, period, phase]
+  o    yellow orbs      [x, y]          refill shots
+  red  swing anchors    [x, y]
+  pur  phase orbs       [x, y]          pass through walls; goal locked until you touch purple again
+  grav gravity orbs     [x, y]
+  tp   teleport pairs   [ax, ay, bx, by]
+  mv   moving solids    [x, y, w, h, dx, dy, period, knock, phase]   knock 0 = elevator, >0 = pusher
+  lz   timed lasers     [x1, y1, x2, y2, on, off, offset]              times in ticks (60 = 1 s)
+  ship gunships         [x, y, dx, dy, period, every, offset]          lock on, 50-tick charge, 24-tick beam
+
+Run:  python3 tools/levels/build_levels.py   then   node tools/bot/solve.js
+"""
+import json, os
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PATH = os.path.join(ROOT, "data", "levels.json")
+
+FLOOR = lambda x0, x1: [x0, 500, x1 - x0, 20]        # spike strip on the floor
+CEIL = lambda x0, x1: [x0, 20, x1 - x0, 22]          # spike strip on the ceiling
+L = lambda name, tip, start, goal, ammo=2, **kw: dict(name=name, tip=tip, start=start, goal=goal, ammo=ammo, **kw)
+
+W1 = [  # ---------------------------------------------------------------- recoil basics
+    L("Hop", "Click where you want to fly. The blast fires the opposite way.", [80, 490], [880, 490],
+      s=[[440, 300, 40, 220]], k=[FLOOR(520, 760)]),
+    L("Gap", "Shots refill when you land. Yellow orbs refill you mid-air.", [80, 490], [885, 490],
+      k=[FLOOR(200, 800), [470, 20, 30, 150]], o=[[360, 320], [620, 320]]),
+    L("Climb", "Chain shots and orbs to go up and over.", [70, 490], [880, 490],
+      s=[[300, 180, 24, 340]], k=[FLOOR(324, 800), [560, 20, 30, 210]], o=[[170, 350], [210, 220], [700, 300]]),
+    L("Corridor", "Spikes above, below, and in the middle. Short, controlled bursts.", [80, 490], [880, 490],
+      s=[[440, 230, 80, 100]], k=[FLOOR(180, 800), CEIL(180, 800), [440, 220, 80, 10], [300, 42, 20, 130], [700, 330, 40, 40]],
+      o=[[320, 330], [640, 330]]),
+    L("Gauntlet", "Everything so far, at once.", [60, 490], [900, 490],
+      s=[[220, 300, 20, 220], [380, 380, 90, 14], [610, 280, 90, 14], [860, 500, 80, 20]],
+      k=[FLOOR(240, 860), [520, 20, 30, 250], [740, 300, 24, 120], CEIL(240, 500)], o=[[300, 200], [780, 190]]),
+]
+
+W2 = [  # ---------------------------------------------------------------- swing
+    L("Swing", "Fly into a red orb's ring to grab it. Fire to let go and keep your speed.", [70, 490], [890, 490],
+      k=[FLOOR(160, 800)], red=[[440, 310]]),
+    L("Vines", "Grabbing refills your shots. Chain the swings.", [70, 490], [890, 490],
+      k=[FLOOR(160, 800), CEIL(160, 800)], red=[[320, 270], [640, 270]]),
+    L("Canopy", "Let go at the top of the swing to gain height.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(160, 940), [560, 300, 24, 200]], red=[[260, 330], [480, 230], [680, 170]]),
+    L("Chain", "Four swings, three spike pillars. Don't touch the floor.", [60, 490], [905, 490],
+      k=[FLOOR(120, 870), [320, 20, 24, 190], [520, 20, 24, 190], [720, 20, 24, 190]],
+      red=[[220, 280], [420, 300], [620, 280], [810, 300]]),
+    L("Trapeze", "One shot. The swings do the rest.", [60, 490], [880, 95], ammo=1,
+      s=[[800, 120, 140, 16]], k=[FLOOR(120, 940), CEIL(140, 760), [400, 360, 24, 140]],
+      red=[[200, 330], [360, 240], [540, 300], [700, 200]]),
+]
+
+W3 = [  # ---------------------------------------------------------------- phase
+    L("Phase", "PURPLE orbs let you pass through walls. The goal stays locked until you touch purple again.",
+      [70, 490], [880, 490], s=[[440, 20, 80, 500]], k=[FLOOR(560, 760)], pur=[[300, 400], [680, 380]]),
+    L("Vault", "Phase in. Turn solid on the inside.", [70, 490], [900, 490],
+      s=[[760, 330, 20, 190], [760, 330, 180, 20]], k=[FLOOR(260, 760), [520, 20, 30, 220]], pur=[[220, 330], [860, 430]]),
+    L("Maze", "Solve the maze, or skip it.", [70, 490], [880, 490],
+      s=[[300, 20, 20, 380], [480, 140, 20, 380], [660, 20, 20, 380]],
+      k=[FLOOR(320, 480), FLOOR(500, 660), [380, 260, 60, 16]], pur=[[180, 380], [780, 340]]),
+    L("Double Lock", "Phase, unlock, phase again, unlock again.", [70, 490], [885, 490],
+      s=[[300, 20, 24, 500], [640, 20, 24, 500]], k=[FLOOR(324, 640), FLOOR(664, 860), CEIL(324, 640)],
+      pur=[[190, 380], [420, 300], [540, 240], [780, 360]]),
+    L("Ghost Walk", "Walls can't stop you. Spikes still can.", [60, 490], [895, 490],
+      s=[[250, 20, 40, 500], [450, 20, 40, 500], [650, 20, 40, 500]],
+      k=[FLOOR(120, 860), CEIL(120, 860), [330, 300, 80, 16], [530, 200, 80, 16], [730, 320, 80, 16]],
+      pur=[[170, 360], [800, 250]], o=[[370, 200], [570, 330]]),
+]
+
+W4 = [  # ---------------------------------------------------------------- teleport
+    L("Portal", "ORANGE orbs come in pairs. Enter one, exit the other at the same speed.", [70, 490], [880, 490],
+      s=[[440, 20, 80, 500]], k=[FLOOR(560, 800)], tp=[[300, 430, 660, 300]]),
+    L("Relay", "Not every portal goes where you want.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(160, 940), [420, 20, 30, 200]], tp=[[220, 420, 560, 130], [640, 330, 120, 130]]),
+    L("Switchback", "Three sealed rooms. Find the way through.", [70, 490], [880, 490],
+      s=[[320, 20, 24, 500], [640, 20, 24, 500]], k=[FLOOR(344, 640), FLOOR(664, 820), CEIL(344, 640)],
+      tp=[[240, 420, 410, 140], [560, 420, 730, 140]]),
+    L("Freefall", "Portals keep your speed. Use that.", [70, 490], [895, 470],
+      s=[[260, 20, 24, 500], [860, 490, 80, 30]], k=[FLOOR(284, 860), CEIL(284, 860), [560, 200, 24, 200]],
+      tp=[[140, 470, 140, 70], [200, 260, 400, 120]], o=[[700, 220]]),
+    L("Crossfire", "Four portal pairs. Two of them are traps.", [60, 490], [890, 100],
+      s=[[800, 125, 140, 16], [300, 20, 24, 300], [600, 220, 24, 300]],
+      k=[FLOOR(120, 940), CEIL(324, 780), [430, 360, 40, 140]],
+      tp=[[200, 420, 450, 120], [520, 260, 120, 120], [700, 420, 380, 300], [720, 220, 700, 90]]),
+]
+
+W5 = [  # ---------------------------------------------------------------- gravity
+    L("Flip", "BLUE orbs flip gravity. Landing on the ceiling refills your shots.", [70, 490], [880, 490],
+      s=[[440, 120, 80, 400]], k=[FLOOR(560, 760)], grav=[[250, 420], [700, 90]]),
+    L("Upside", "The goal is on the ceiling. So are the spikes.", [70, 490], [885, 45],
+      k=[FLOOR(160, 940), CEIL(320, 680)], grav=[[230, 420]], o=[[500, 170]]),
+    L("Ceiling Run", "Run the ceiling, then come back down.", [70, 490], [885, 490],
+      s=[[300, 140, 24, 380], [620, 140, 24, 380]], k=[FLOOR(324, 860), CEIL(380, 560), CEIL(700, 820)],
+      grav=[[200, 420], [760, 200]], o=[[470, 120]]),
+    L("Pinball", "Flip mid-air. The pocket only opens on the right.", [70, 490], [470, 270],
+      s=[[400, 300, 140, 16], [400, 225, 140, 16]], k=[FLOOR(140, 940), CEIL(140, 940), [400, 241, 14, 59]],
+      grav=[[240, 300], [700, 200], [700, 380]], o=[[240, 160]]),
+    L("Slalom", "Walls from above and below. Gravity decides which way is up.", [60, 490], [895, 490],
+      s=[[220, 20, 24, 330], [400, 190, 24, 330], [580, 20, 24, 330], [760, 190, 24, 330]],
+      k=[FLOOR(244, 400), FLOOR(604, 760), CEIL(424, 580), CEIL(784, 940)],
+      grav=[[310, 400], [490, 140], [670, 400]], o=[[850, 300]]),
+]
+
+W6 = [  # ---------------------------------------------------------------- moving spikes
+    L("Sweepers", "Moving spikes start moving on your first shot. Time it.", [70, 490], [880, 490],
+      k=[[300, 200, 24, 120, 0, 190, 150], [480, 200, 24, 120, 0, -190, 150], [660, 200, 24, 120, 0, 190, 150]]),
+    L("Pistons", "Same rhythm, different timing.", [70, 490], [885, 490],
+      k=[FLOOR(180, 820), [250, 200, 30, 120, 0, 170, 120, 0.0], [420, 200, 30, 120, 0, 170, 120, 0.25],
+         [590, 200, 30, 120, 0, 170, 120, 0.5], [760, 200, 30, 120, 0, 170, 120, 0.75]],
+      o=[[335, 330], [505, 330], [675, 330]]),
+    L("Conveyor", "The floor is safe. The floor is not safe.", [60, 490], [895, 490],
+      k=[[300, 490, 80, 30, 220, 0, 160], [600, 490, 80, 30, -220, 0, 160, 0.5], CEIL(160, 800), [470, 200, 30, 100]],
+      o=[[300, 300], [640, 300]]),
+    L("Clockwork", "Windows open and close. Go through them.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(160, 940), [300, 150, 24, 140, 0, 150, 140], [500, 150, 24, 140, 0, -150, 140],
+         [650, 260, 140, 24, 0, 120, 110, 0.3], [430, 20, 24, 120]],
+      o=[[400, 330], [580, 200], [720, 380]]),
+    L("Storm", "Everything moves.", [60, 490], [900, 490],
+      s=[[860, 500, 80, 20]], k=[FLOOR(140, 860), [220, 250, 60, 24, 0, 170, 130], [380, 250, 24, 60, 120, 0, 150, 0.2],
+         [560, 250, 60, 24, 0, -170, 110, 0.5], [720, 250, 24, 60, 100, 0, 170, 0.7], [470, 20, 30, 140]],
+      o=[[300, 380], [480, 160], [650, 380], [800, 200]]),
+]
+
+W7 = [  # ---------------------------------------------------------------- elevators
+    L("Lift", "Moving platforms carry you. Standing on one refills your shots.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(160, 940)], mv=[[420, 420, 120, 14, 0, -170, 240, 0]]),
+    L("Ferry", "One shot. Ride across, and don't fall off.", [60, 490], [895, 490], ammo=1,
+      s=[[860, 500, 80, 20]], k=[FLOOR(140, 860), CEIL(140, 860)], mv=[[220, 420, 110, 14, 260, 0, 300, 0, 0.75]],
+      o=[[740, 300]]),
+    L("Stack", "Climb the moving stairs.", [70, 490], [885, 85],
+      s=[[820, 110, 120, 16]], k=[FLOOR(150, 940), [600, 20, 30, 120]],
+      mv=[[180, 400, 100, 14, 0, -60, 150, 0], [360, 320, 100, 14, 0, 60, 150, 0], [540, 240, 100, 14, 0, -60, 150, 0],
+          [700, 180, 100, 14, 60, 0, 180, 0]]),
+    L("Shaft", "Elevators and a spiked ceiling. Get off before the top.", [70, 490], [895, 490],
+      s=[[300, 300, 24, 220], [640, 20, 24, 380]], k=[FLOOR(324, 860), CEIL(324, 640)],
+      mv=[[360, 360, 110, 14, 0, -110, 200, 0], [500, 300, 110, 14, 0, 130, 200, 0, 0.5], [700, 300, 110, 14, 0, -110, 180, 0]]),
+    L("Rush Hour", "One shot. Elevators and moving spikes. Read both.", [60, 490], [895, 470], ammo=1,
+      s=[[860, 490, 80, 30]], k=[FLOOR(140, 860), CEIL(140, 860), [330, 150, 24, 100, 0, 110, 140], [620, 150, 24, 100, 0, -110, 140]],
+      mv=[[180, 400, 100, 14, 140, 0, 220, 0], [440, 330, 100, 14, 0, -130, 180, 0, 0.5], [700, 330, 100, 14, 0, 120, 200, 0]]),
+]
+
+W8 = [  # ---------------------------------------------------------------- pushers
+    L("Shove", "PUSHERS knock you away. Pinned against a wall = crushed.", [70, 490], [890, 490],
+      k=[FLOOR(560, 800)], mv=[[300, 400, 40, 120, 120, 0, 150, 9]]),
+    L("Piston Hall", "Pistons slam down from the ceiling.", [60, 490], [895, 490],
+      k=[FLOOR(780, 860), CEIL(140, 860)],
+      mv=[[160, 190, 60, 140, 0, 180, 90, 9], [330, 190, 60, 140, 0, 180, 90, 9, 0.25],
+          [500, 190, 60, 140, 0, 180, 90, 9, 0.5], [670, 190, 60, 140, 0, 180, 90, 9, 0.75]]),
+    L("Launchpad", "A pusher hits hard. Ride the hit.", [80, 490], [880, 100],
+      s=[[800, 125, 140, 16], [260, 300, 20, 220]], k=[FLOOR(280, 940)],
+      mv=[[30, 430, 40, 80, 150, 0, 120, 13]], o=[[560, 200]]),
+    L("Grinder", "Pushers shove you toward the spikes.", [60, 490], [895, 470],
+      s=[[860, 490, 80, 30]], k=[FLOOR(140, 860), CEIL(140, 860)],
+      mv=[[200, 200, 40, 120, 0, 110, 140, 10], [440, 300, 40, 120, 0, -110, 140, 10, 0.5], [680, 200, 40, 120, 0, 110, 140, 10, 0.25]],
+      o=[[320, 250], [560, 330], [790, 250]]),
+    L("Compactor", "Walls close in. Don't be there when they meet.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(140, 940)],
+      mv=[[150, 300, 40, 220, 160, 0, 160, 9], [600, 300, 40, 220, -160, 0, 160, 9], [380, 20, 120, 40, 0, 150, 140, 9, 0.5]],
+      o=[[390, 300], [700, 220]]),
+]
+
+W9 = [  # ---------------------------------------------------------------- lasers
+    L("Gate", "Lasers switch on and off. A faint line warns you first.", [70, 490], [880, 490],
+      lz=[[480, 20, 480, 520, 70, 60, 0]]),
+    L("Rhythm", "Three gates, one beat.", [70, 490], [885, 490],
+      k=[FLOOR(160, 820)], lz=[[300, 20, 300, 520, 60, 50, 0], [480, 20, 480, 520, 60, 50, 35], [660, 20, 660, 520, 60, 50, 70]],
+      o=[[390, 300], [570, 300]]),
+    L("Grid", "Up, down, across. Something is always on.", [60, 490], [880, 100],
+      s=[[800, 125, 140, 16]], k=[FLOOR(140, 940)],
+      lz=[[20, 300, 760, 300, 60, 70, 0], [400, 20, 400, 520, 50, 60, 30], [620, 20, 620, 520, 50, 60, 70], [20, 180, 760, 180, 60, 70, 65]],
+      o=[[300, 380], [520, 240], [720, 380]]),
+    L("Crossbeam", "Diagonal lasers. Watch the angles.", [60, 490], [895, 490],
+      k=[FLOOR(140, 860), CEIL(140, 860)], lz=[[200, 20, 500, 520, 70, 50, 0], [460, 20, 760, 520, 70, 50, 60], [760, 20, 460, 520, 50, 70, 20]],
+      o=[[300, 260], [600, 300], [800, 260]]),
+    L("Strobe", "Fast lasers. Faster decisions.", [60, 490], [895, 470],
+      s=[[860, 490, 80, 30], [300, 260, 24, 260], [600, 20, 24, 260]], k=[FLOOR(140, 860)],
+      lz=[[200, 20, 200, 520, 30, 40, 0], [450, 20, 450, 520, 30, 40, 15], [720, 20, 720, 520, 25, 45, 0],
+          [324, 180, 600, 180, 40, 45, 20]],
+      o=[[250, 200], [520, 380], [800, 250]]),
+]
+
+W10 = [  # --------------------------------------------------------------- gunships
+    L("Sentry", "GUNSHIPS aim where you are, charge up, then fire. Walls block the beam.", [70, 490], [890, 490],
+      s=[[300, 360, 30, 160], [600, 360, 30, 160]], ship=[[480, 90, 0, 0, 0, 130, 40]]),
+    L("Patrol", "This one moves.", [70, 490], [880, 100],
+      s=[[800, 125, 140, 16], [420, 300, 120, 16]], k=[FLOOR(160, 940)], ship=[[480, 80, 300, 0, 300, 120, 30]],
+      o=[[300, 300], [650, 250]]),
+    L("Crossfire Two", "Two ships. Keep moving.", [60, 490], [895, 490],
+      s=[[300, 300, 24, 220], [620, 300, 24, 220]], k=[FLOOR(324, 620)], ship=[[160, 80, 0, 0, 0, 140, 20], [800, 80, 0, 0, 0, 140, 90]],
+      o=[[470, 250]]),
+    L("Bunker Run", "Hide, then run.", [60, 490], [895, 470],
+      s=[[860, 490, 80, 30], [220, 340, 80, 16], [460, 280, 80, 16], [700, 340, 80, 16]], k=[FLOOR(140, 860)],
+      ship=[[480, 70, 360, 0, 360, 110, 0], [880, 250, 0, 120, 200, 150, 70]], o=[[380, 200], [620, 200]]),
+    L("Armada", "Three ships. Find the gaps in their timing.", [60, 490], [880, 100],
+      s=[[800, 125, 140, 16], [250, 250, 24, 270], [520, 160, 24, 360]], k=[FLOOR(274, 940), CEIL(274, 760)],
+      ship=[[150, 80, 0, 0, 0, 150, 0], [650, 300, 0, 150, 220, 130, 50], [900, 300, 0, 0, 0, 160, 100]],
+      o=[[390, 320], [660, 160]]),
+]
+
+FINALS = [  # ------------------------------------------------------------ 3+ mechanics each
+    L("Overdrive", "Swing, portal, lasers.", [60, 490], [895, 490],
+      k=[FLOOR(140, 860)], red=[[240, 300]], tp=[[420, 300, 620, 160]], lz=[[520, 20, 520, 520, 60, 50, 20], [760, 20, 760, 520, 50, 60, 60]]),
+    L("Night Shift", "Elevator, gunship, phase.", [70, 490], [890, 490],
+      s=[[480, 20, 30, 500]], k=[FLOOR(160, 860)], mv=[[200, 400, 110, 14, 0, -150, 200, 0]],
+      pur=[[300, 220], [700, 300]], ship=[[750, 80, 0, 0, 0, 140, 60]]),
+    L("Inversion", "Gravity, moving spikes, swing.", [60, 490], [885, 45],
+      k=[FLOOR(140, 940), [400, 200, 24, 120, 0, 150, 140], [620, 100, 24, 100, 0, 120, 120, 0.5]],
+      red=[[280, 300]], grav=[[520, 330]], o=[[760, 200]]),
+    L("Piston Portal", "Pushers, portals, lasers.", [70, 490], [890, 100],
+      s=[[800, 125, 140, 16], [440, 20, 24, 500]], k=[FLOOR(160, 940)],
+      mv=[[200, 300, 40, 120, 120, 0, 140, 10]], tp=[[350, 420, 560, 420]], lz=[[680, 20, 680, 520, 60, 60, 30]], o=[[620, 250]]),
+    L("Signal Lost", "Phase, lasers, gunship.", [60, 490], [895, 490],
+      s=[[300, 20, 24, 500], [640, 20, 24, 500]], k=[FLOOR(140, 860)],
+      pur=[[200, 360], [780, 380]], lz=[[480, 20, 480, 520, 50, 50, 0]], ship=[[480, 80, 200, 0, 260, 140, 40]], o=[[400, 250], [560, 250]]),
+    L("Freight", "One shot. Elevators, pushers, moving spikes.", [60, 490], [895, 470], ammo=1,
+      s=[[860, 490, 80, 30]], k=[FLOOR(140, 860), [500, 150, 24, 100, 0, 120, 130]],
+      mv=[[180, 400, 100, 14, 0, -140, 200, 0], [380, 150, 40, 100, 0, 150, 150, 10], [620, 360, 100, 14, 150, 0, 220, 0]]),
+    L("Zero-G Gunfight", "Gravity, gunships, swing.", [60, 490], [880, 100],
+      s=[[800, 125, 140, 16], [450, 220, 24, 300]], k=[FLOOR(140, 940)],
+      grav=[[240, 400], [660, 140]], red=[[350, 260]], ship=[[620, 420, 0, 0, 0, 150, 40]], o=[[560, 180]]),
+    L("Warp Core", "Portals, phase, elevators, lasers.", [70, 490], [895, 490],
+      s=[[320, 20, 24, 500], [640, 20, 24, 500]], k=[FLOOR(344, 640), FLOOR(664, 860)],
+      tp=[[240, 420, 400, 140]], pur=[[560, 160], [780, 360]], mv=[[380, 420, 100, 14, 120, 0, 200, 0]], lz=[[700, 20, 700, 520, 50, 50, 25]]),
+    L("Everything", "Phase. Swing. Flip. Dodge. Every mechanic, one run.", [60, 490], [880, 45],
+      s=[[480, 20, 24, 500]], k=[FLOOR(140, 940), [700, 20, 30, 22, 80, 0, 120]],
+      pur=[[220, 400], [820, 140]], red=[[370, 300]], grav=[[620, 260]],
+      lz=[[740, 200, 940, 200, 50, 60, 0], [560, 20, 560, 330, 45, 55, 25]], ship=[[300, 80, 0, 0, 0, 120, 70]]),
+    L("Final Exam", "You know everything now. Prove it.", [60, 490], [900, 45],
+      s=[[300, 20, 20, 500], [640, 20, 20, 500]], k=[FLOOR(140, 940), CEIL(340, 620), [430, 380, 20, 20, 0, 90, 100],
+         [840, 200, 24, 24, 0, 110, 110]],
+      pur=[[180, 380], [870, 140]], red=[[430, 250]], tp=[[560, 420, 720, 160]], grav=[[800, 260]],
+      mv=[[340, 440, 80, 14, 0, -120, 180, 0]], lz=[[660, 330, 940, 330, 50, 50, 10], [760, 20, 760, 330, 40, 50, 30]],
+      ship=[[480, 70, 120, 0, 240, 125, 30], [180, 80, 0, 0, 0, 140, 110]]),
+]
+
+# Order inside each world, easiest first (measured with tools/bot/check.js; the intro level stays first).
+ORDER = {
+    "W1": ["Hop", "Gap", "Corridor", "Climb", "Gauntlet"],
+    "W2": ["Swing", "Vines", "Chain", "Canopy", "Trapeze"],
+    "W6": ["Sweepers", "Conveyor", "Storm", "Pistons", "Clockwork"],
+    "W7": ["Lift", "Ferry", "Rush Hour", "Shaft", "Stack"],
+    "W8": ["Shove", "Piston Hall", "Compactor", "Grinder", "Launchpad"],
+    "W9": ["Gate", "Crossbeam", "Grid", "Strobe", "Rhythm"],
+    "W10": ["Sentry", "Bunker Run", "Crossfire Two", "Patrol", "Armada"],
+    "FINALS": ["Zero-G Gunfight", "Overdrive", "Inversion", "Signal Lost", "Warp Core", "Freight", "Night Shift",
+               "Piston Portal", "Everything", "Final Exam"],
+}
+for _name, _order in ORDER.items():
+    _lst = globals()[_name]
+    _by = {l["name"]: l for l in _lst}
+    assert sorted(_by) == sorted(_order), _name
+    _lst[:] = [_by[n] for n in _order]
+
+WORLDS = [W1, W2, W3, W4, W5, W6, W7, W8, W9, W10]
+WORLD_NAMES = ["Recoil", "Swing", "Phase", "Teleport", "Gravity", "Moving Spikes", "Elevators", "Pushers", "Lasers", "Gunships", "Finals"]
+
+
+def build():
+    levels = []
+    for wi, world in enumerate(WORLDS + [FINALS]):
+        for li, lvl in enumerate(world):
+            lvl = dict(lvl)
+            lvl["world"] = WORLD_NAMES[wi]
+            levels.append(lvl)
+    assert len(levels) == 60, len(levels)
+    data = json.load(open(PATH))
+    data["levels"] = levels
+    data["worlds"] = WORLD_NAMES
+    data.pop("par", None)  # recomputed by tools/bot/par.js
+    data["par"] = {}
+    json.dump(data, open(PATH, "w"), indent=1)
+    print(f"wrote {len(levels)} levels to {PATH}")
+
+
+if __name__ == "__main__":
+    build()

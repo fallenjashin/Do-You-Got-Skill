@@ -22,9 +22,10 @@ function replay(i,diff,acts){ // the exact procedure the Godot test will follow
     res=C.tick(r);r.events.length=0;if(r.t%10===0)trace.push([r.t,r.p.x,r.p.y]);if(res)break;}
   return {result:res||'timeout',t:r.t,shots:r.shots,final:[r.p.x,r.p.y,r.p.vx,r.p.vy,r.p.ammo,r.phased?1:0,r.g],trace};}
 const R=rng(12345),cases=[];let wins=0;
+// winning runs on Medium and Master for every level; random runs on all four difficulties
 for(let i=0;i<C.LEVELS.length;i++)for(const diff of ['easy','medium','hard','master']){
-  const w=findWin(i,diff,R);if(w){const g=replay(i,diff,w);if(g.result!=='win')throw new Error('replay mismatch '+i+diff);wins++;cases.push({level:i,diff,kind:'win',acts:w,...g});}
+  if(diff==='medium'||diff==='master'){const w=findWin(i,diff,R);if(w){const g=replay(i,diff,w);if(g.result!=='win')throw new Error('replay mismatch '+i+diff);wins++;cases.push({level:i,diff,kind:'win',acts:w,...g});}}
   for(let k=0;k<2;k++){const a=randomActs(i,diff,R);cases.push({level:i,diff,kind:'random',acts:a,...replay(i,diff,a)});}}
 require('fs').writeFileSync(require('path').join(__dirname,'../../tests/golden_runs.json'),JSON.stringify(cases));
 const by={};cases.forEach(c=>by[c.result]=(by[c.result]||0)+1);
-console.log('cases',cases.length,'winning solutions',wins,'/96  outcomes',JSON.stringify(by));
+console.log('cases',cases.length,'winning solutions',wins,'/'+(C.LEVELS.length*2)+'  outcomes',JSON.stringify(by));

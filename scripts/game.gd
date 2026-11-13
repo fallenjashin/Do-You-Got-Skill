@@ -31,18 +31,13 @@ const DIFF_COLOR := {"easy": Color("#2ed573"), "medium": Color("#4dabf7"), "hard
 # Neon wall colours. Kept away from the spike red so hazards always stand out.
 const NEON_BY_DIFF := {"easy": Color("#39ff88"), "medium": Color("#22c8ff"), "hard": Color("#ff9f2e"),
 	"master": Color("#ff3df2"), "god": Color("#ffd447")}
-const NEON_BY_WORLD := [
-	"#22e6ff","#22e6ff","#22e6ff","#22e6ff","#22e6ff",    # basics: cyan
-	"#ff3df2","#ff3df2","#ff3df2",                        # swing: magenta
-	"#9d6bff","#9d6bff","#9d6bff",                        # phase: violet
-	"#ffd447",                                            # finale: gold
-	"#ff9f2e","#ff9f2e",                                  # teleport: orange
-	"#3d7bff","#3d7bff",                                  # gravity: electric blue
-	"#b6ff3b",                                            # moving spikes: lime
-	"#22e6ff","#ff3df2","#b6ff3b","#ff9f2e","#9d6bff","#3d7bff","#ffd447"]  # combos: a new colour each level
-const GROUP_COLOR := ["#e8ecff","#e8ecff","#e8ecff","#e8ecff","#e8ecff","#ff6b6b","#ff6b6b","#ff6b6b",
-	"#b388ff","#b388ff","#b388ff","#ffd166","#ff9f43","#ff9f43","#4dabf7","#4dabf7","#ff4d6d",
-	"#2ed573","#2ed573","#2ed573","#2ed573","#2ed573","#2ed573","#2ed573"]
+# One neon colour per world (5 levels each); every final gets its own.
+const WORLD_NEON := ["#22e6ff", "#ff3df2", "#9d6bff", "#ff9f2e", "#3d7bff", "#b6ff3b", "#3dffd0", "#ffb020", "#ff5fa2", "#a0a8ff"]
+const FINAL_NEON := ["#22e6ff", "#ff3df2", "#b6ff3b", "#ff9f2e", "#9d6bff", "#3dffd0", "#3d7bff", "#ffb020", "#ff5fa2", "#ffd447"]
+const C_LASER := Color("#ff2a5a")
+const C_ELEVATOR := Color("#7df9ff")
+const C_PUSHER := Color("#ffb020")
+const C_SHIP := Color("#ff4d6d")
 
 var data: Dictionary
 var sim: Sim
@@ -144,7 +139,16 @@ func toggle_neon() -> void:
 
 
 func neon() -> Color:
-	return Color(NEON_BY_WORLD[li]) if neon_mode == "world" else NEON_BY_DIFF[diff]
+	return world_color(li) if neon_mode == "world" else NEON_BY_DIFF[diff]
+
+
+func world_color(i: int) -> Color:
+	return Color(WORLD_NEON[i / 5]) if i < 50 else Color(FINAL_NEON[(i - 50) % FINAL_NEON.size()])
+
+
+## "3-2" for world 3 level 2, "F7" for the seventh final.
+func level_code(i: int) -> String:
+	return "%d-%d" % [i / 5 + 1, i % 5 + 1] if i < 50 else "F%d" % (i - 49)
 
 
 func toggle_aim() -> void:
@@ -179,7 +183,9 @@ const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const AIM_BOX := Rect2(770, 26, 170, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 
-func menu_box(i: int) -> Rect2: return Rect2(85 + (i % 6) * 135, 178 + (i / 6) * 80, 120, 68)
+func menu_box(i: int) -> Rect2:
+	var col := i % 10
+	return Rect2(26 + col * 90 + (16 if col >= 5 else 0), 176 + (i / 10) * 55, 84, 47)
 func diff_box(i: int) -> Rect2: return Rect2(140 + i * 140, 78, 128, 34)
 func hit(r: Rect2) -> bool: return r.has_point(aim)
 
@@ -214,8 +220,8 @@ func _pad_button(b: int) -> void:
 		match b:
 			JOY_BUTTON_DPAD_LEFT: menu_sel = posmod(menu_sel - 1, level_total())
 			JOY_BUTTON_DPAD_RIGHT: menu_sel = posmod(menu_sel + 1, level_total())
-			JOY_BUTTON_DPAD_UP: menu_sel = posmod(menu_sel - 6, level_total())
-			JOY_BUTTON_DPAD_DOWN: menu_sel = posmod(menu_sel + 6, level_total())
+			JOY_BUTTON_DPAD_UP: menu_sel = posmod(menu_sel - 10, level_total())
+			JOY_BUTTON_DPAD_DOWN: menu_sel = posmod(menu_sel + 10, level_total())
 			JOY_BUTTON_LEFT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) - 1, DIFFS.size())])
 			JOY_BUTTON_RIGHT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) + 1, DIFFS.size())])
 			JOY_BUTTON_A: start_god() if one_life() else load_level(menu_sel)
@@ -309,6 +315,9 @@ func _physics_process(_delta: float) -> void:
 			"phase": sfx.beep(400, 0.25, "sine", 0.07, 900); burst(sim.px, sim.py, C_PURPLE, 20, 4)
 			"unphase": sfx.beep(900, 0.2, "sine", 0.07, 400); burst(sim.px, sim.py, C_PURPLE, 20, 4)
 			"locked": sfx.beep(150, 0.15, "square", 0.05)
+			"knock": sfx.beep(110, 0.12, "square", 0.08, 60); shake = 7.0
+			"charge": sfx.beep(220, 0.5, "sine", 0.03, 880)
+			"beam": sfx.beep(1400, 0.25, "sawtooth", 0.04, 300)
 			"grav":
 				sfx.beep(700 if sim.g > 0 else 300, 0.22, "sine", 0.07, 300 if sim.g > 0 else 700)
 				burst(sim.px, sim.py, C_BLUE, 18, 4); shake = 4.0
@@ -474,6 +483,9 @@ func _draw_world() -> void:
 			else:
 				draw_rect(r, C_SPIKE)
 
+	_draw_moving_solids()
+	_draw_lasers(now)
+
 	# goal
 	var gp := Vector2(float(L.goal[0]), float(L.goal[1]))
 	if sim.phased:
@@ -529,6 +541,8 @@ func _draw_world() -> void:
 		draw_circle(op, 11, Color(C_BLUE, a))
 		text("⇅", op.x, op.y + 5, 13, Color("#0b2540"), "c", true)
 
+	_draw_ships(now)
+
 	# ghost of your best run
 	if ghost != null and sim.started and gi < ghost.size():
 		draw_circle(Vector2(ghost[gi], ghost[gi + 1]), 11, Color(Color("#9fb4ff"), 0.35))
@@ -569,10 +583,98 @@ func _draw_world() -> void:
 		draw_circle(Vector2(p.x - (sim.ammo_max - 1) * 5 + i * 10, p.y - 22), 3.5, C_SHOT if i < sim.ammo else Color(1, 1, 1, 0.15))
 
 
+func _tau() -> float:
+	return sim.t * float(sim.d.spike)
+
+
+## Elevators (cyan, carry you) and pushers (amber with chevrons, knock you). A faint track shows their path.
+func _draw_moving_solids() -> void:
+	var tau := _tau()
+	for m in sim.L.get("mv", []):
+		var knock := float(m[7]) if m.size() > 7 else 0.0
+		var c := C_PUSHER if knock > 0.0 else C_ELEVATOR
+		var base := Rect2(float(m[0]), float(m[1]), float(m[2]), float(m[3]))
+		var ext := Vector2(float(m[4]), float(m[5]))
+		draw_dashed_line(base.get_center() - ext, base.get_center() + ext, Color(c, 0.18), 1.0, 4.0)
+		var r := rect_of(Sim.mv_at(m, tau))
+		if sim.phased:
+			draw_rect(r, Color(c.darkened(0.8), 0.25)); dashed_rect(r, C_PURPLE)
+			continue
+		# moving things are FILLED; static walls are only outlined
+		neon_outline(r, c, 1.0)
+		draw_rect(r, Color(c, 0.88))
+		if knock > 0.0:
+			var ph := float(m[8]) if m.size() > 8 else 0.0
+			var moving := cos(2.0 * PI * (tau / float(m[6]) + ph))
+			var dir := ext.normalized() * (1.0 if moving >= 0.0 else -1.0)
+			var perp := Vector2(-dir.y, dir.x)
+			for k in [-1, 0, 1]:
+				var q: Vector2 = r.get_center() + dir * (k * 11.0)
+				draw_colored_polygon(PackedVector2Array([q + dir * 5, q - dir * 3 + perp * 6, q - dir * 3 - perp * 6]), Color("#2a1600"))
+		else:
+			draw_line(r.position + Vector2(2, 2), r.position + Vector2(r.size.x - 2, 2), Color(1, 1, 1, 0.9), 2.0)
+
+
+## Timed lasers: dim dashes when off, flicker warning just before, bright beam when on.
+func _draw_lasers(now: float) -> void:
+	var tau := _tau()
+	for lz in sim.L.get("lz", []):
+		var a := Vector2(float(lz[0]), float(lz[1]))
+		var b := Vector2(float(lz[2]), float(lz[3]))
+		var period := float(lz[4]) + float(lz[5])
+		var cyc := fmod(tau + float(lz[6]), period)
+		if Sim.laser_on(lz, tau):
+			beam(a, b, 1.0)
+		elif cyc > period - 30.0:
+			var flick := 0.25 if fmod(now * 18.0, 1.0) > 0.5 else 0.08
+			draw_line(a, b, Color(C_LASER, flick), 1.5)
+		else:
+			draw_dashed_line(a, b, Color(C_LASER, 0.10), 1.0, 6.0)
+		for e in [a, b]:
+			draw_rect(Rect2(e - Vector2(5, 5), Vector2(10, 10)), Color("#2a0a12"))
+			draw_rect(Rect2(e - Vector2(5, 5), Vector2(10, 10)), C_LASER, false, 1.5)
+
+
+func beam(a: Vector2, b: Vector2, scale: float) -> void:
+	draw_line(a, b, Color(C_LASER, 0.12), 14.0 * scale)
+	draw_line(a, b, Color(C_LASER, 0.45), 6.0 * scale)
+	draw_line(a, b, Color(1, 0.85, 0.9, 0.95), 2.0 * scale)
+
+
+## Gunships: turn toward their locked target, show a charge line, then fire.
+func _draw_ships(now: float) -> void:
+	var tau := _tau()
+	var ships_def: Array = sim.L.get("ship", [])
+	for j in ships_def.size():
+		var sh: Array = ships_def[j]
+		var st: Dictionary = sim.ships[j]
+		var pos := Sim.ship_at(sh, tau)
+		var cyc := fmod(tau + float(sh[6]), float(sh[5]))
+		var dir := (Vector2(sim.px, sim.py) - pos).normalized()
+		if st.lock != null:
+			var a := Vector2(st.lock.ox, st.lock.oy)
+			var b := Vector2(st.lock.ex, st.lock.ey)
+			dir = (b - a).normalized()
+			if st.firing:
+				beam(a, b, 1.3)
+			elif cyc < Sim.SHIP_CHARGE:
+				var k: float = cyc / Sim.SHIP_CHARGE
+				draw_line(a, b, Color(C_LASER, 0.08 + 0.4 * k), 1.0 + 2.0 * k)
+		if dir == Vector2.ZERO:
+			dir = Vector2.DOWN
+		var perp := Vector2(-dir.y, dir.x)
+		glow(pos, 14, C_SHIP, 0.8)
+		draw_colored_polygon(PackedVector2Array([pos + dir * 18, pos - dir * 10 + perp * 13, pos - dir * 4, pos - dir * 10 - perp * 13]), C_SHIP)
+		draw_circle(pos + dir * 3, 4.0, Color("#ffe0e6"))
+		if st.lock != null and not st.firing and cyc < Sim.SHIP_CHARGE:
+			draw_circle(pos + dir * 18, 2.0 + 5.0 * cyc / Sim.SHIP_CHARGE, Color(C_LASER, 0.8))
+
+
 func _draw_hud() -> void:
 	draw_rect(HUD_LEVELS, Color(C_PANEL_HI if hit(HUD_LEVELS) else Color(0.15, 0.17, 0.23, 0.9), ui_alpha))
 	text("☰ Levels", HUD_LEVELS.get_center().x, HUD_LEVELS.position.y + 20, 13, Color("#c6cde8"), "c", true)
-	text("%d/%d  %s" % [li + 1, level_total(), sim.L.name], 126, 39, 15, Color("#c6cde8"), "l", true)
+	text("%s  %s" % [level_code(li), sim.L.name], 126, 39, 15, Color("#c6cde8"), "l", true)
+	text(str(sim.L.get("world", "")).to_upper(), 126 + 90, 58, 12, world_color(li), "l", true)
 	text(data.difficulties[diff].label.to_upper(), 126, 58, 12, DIFF_COLOR[diff], "l", true)
 	if one_life():
 		text("run %s   best run %s" % [fmt(god.total + (0 if sim.done else sim.t)), fmt(best["god:run"]) if best.has("god:run") else "—"], W - 34, 39, 15, Color("#c6cde8"), "r", true)
@@ -644,28 +746,34 @@ func _draw_menu() -> void:
 		"medium": "The game as designed.",
 		"hard": "Yellow orbs work once · faster spikes · tighter grabs",
 		"master": "Spike hitboxes bigger than they look · fastest spikes · no aim line",
-		"god": "Master rules · ONE LIFE for all 24 levels · die and restart from 1   (best run %s, fewest shots %s)" % [
-			fmt(best["god:run"]) if best.has("god:run") else "—", str(best["god:shots"]) if best.has("god:shots") else "—"],
+		"god": "Master rules · ONE LIFE for all %d levels · die and restart from 1   (best run %s, fewest shots %s)" % [
+			level_total(), fmt(best["god:run"]) if best.has("god:run") else "—", str(best["god:shots"]) if best.has("god:shots") else "—"],
 	}
 	text(blurbs[diff], W / 2, 140, 13, C_SUB)
 	if one_life():
 		text("Click any level to start a God run from level 1", W / 2, 160, 13, C_ORB, "c", true)
 	for i in level_total():
 		var b := menu_box(i)
+		var wc := world_color(i)
 		var selected := using_pad and i == menu_sel
+		if i % 5 == 0 and i < 50:  # world name above its first level
+			text(data.worlds[i / 5].to_upper(), b.position.x, b.position.y - 3, 10, wc, "l", true)
+		elif i == 50:
+			text("FINALS — 3+ MECHANICS EACH", b.position.x, b.position.y - 3, 10, C_ORB, "l", true)
 		draw_rect(b, C_PANEL_HI if hit(b) or selected else C_PANEL)
 		if selected: draw_rect(b, C_TEXT, false, 2.0)
-		draw_rect(Rect2(b.position, Vector2(b.size.x, 3)), Color(GROUP_COLOR[i]))
-		text("%d. %s" % [i + 1, data.levels[i].name], b.get_center().x, b.position.y + 28, 14, C_TEXT, "c", true)
+		draw_rect(Rect2(b.position, Vector2(b.size.x, 2)), wc)
+		var nm: String = data.levels[i].name
+		text(level_code(i), b.position.x + 5, b.position.y + 15, 10, wc, "l", true)
+		text(nm, b.get_center().x, b.position.y + 28, 11 if nm.length() <= 11 else 9, C_TEXT, "c", true)
 		var bt = best.get(key(i), null)
 		var bs = best.get(skey(i), null)
 		var pr = par(i)
-		var line := "%s · %d shot%s" % [fmt(bt), int(bs), "" if int(bs) == 1 else "s"] if bt != null and bs != null else "not cleared"
-		text(line, b.get_center().x, b.position.y + 47, 12, C_GOAL if bt != null else C_DIM)
 		var mark := ""
 		if bs != null and pr != null:
-			mark = " ★" if bs < pr else (" ✓" if bs == pr else "")
-		text("par %s%s" % [str(pr) if pr != null else "—", mark], b.get_center().x, b.position.y + 61, 11, C_ORB if mark != "" else C_DIM)
-	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else \
-		"white basics · red swing · purple phase · orange teleport · blue gravity · pink moving spikes · green combos"
-	text(legend, W / 2, 514, 13, C_DIM)
+			mark = "★" if bs < pr else ("✓" if bs == pr else "")
+		var line := "%s %d/%s %s" % [fmt(bt), int(bs), str(pr) if pr != null else "—", mark] if bt != null and bs != null \
+			else "par %s" % (str(pr) if pr != null else "—")
+		text(line, b.get_center().x, b.position.y + 42, 10, (C_ORB if mark != "" else C_GOAL) if bt != null else C_DIM)
+	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  time  shots/par  (★ under par)"
+	text(legend, W / 2, 528, 11, C_DIM)

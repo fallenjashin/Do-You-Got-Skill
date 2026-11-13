@@ -117,12 +117,42 @@ const CORE = (() => {
     const nx = Math.max(x, Math.min(cx, x + w)), ny = Math.max(y, Math.min(cy, y + h));
     return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
   }
-  // moving spikes: [x,y,w,h, dx,dy,period] oscillate with run time (frozen until your first shot)
+  // moving spikes: [x,y,w,h, dx,dy,period, phase?] oscillate with run time (frozen until your first shot)
   function spikeAt(k, t) {
     if (k.length < 7) return k;
-    const o = Math.sin(2 * Math.PI * t / k[6]);
+    const o = Math.sin(2 * Math.PI * (t / k[6] + (k.length > 7 ? k[7] : 0)));
     return [k[0] + k[4] * o, k[1] + k[5] * o, k[2], k[3]];
   }
+  // moving solids (elevators / pushers): [x,y,w,h, dx,dy,period, knock, phase]
+  function mvAt(m, t) {
+    const o = Math.sin(2 * Math.PI * (t / m[6] + (m.length > 8 ? m[8] : 0)));
+    return [m[0] + m[4] * o, m[1] + m[5] * o, m[2], m[3]];
+  }
+  // gunship position: [x,y, dx,dy, period, every, offset]
+  function shipAt(sh, t) {
+    if (!(sh[4] > 0)) return [sh[0], sh[1]];
+    const o = Math.sin(2 * Math.PI * t / sh[4]);
+    return [sh[0] + sh[2] * o, sh[1] + sh[3] * o];
+  }
+  const SHIP_CHARGE = 50, SHIP_FIRE = 24, SHIP_BODY = 13;
+  function distSeg(px, py, x1, y1, x2, y2) {
+    const vx = x2 - x1, vy = y2 - y1, wx = px - x1, wy = py - y1;
+    const l2 = vx * vx + vy * vy;
+    let u = l2 > 0 ? (wx * vx + wy * vy) / l2 : 0;
+    u = Math.max(0, Math.min(1, u));
+    return len2(px - (x1 + u * vx), py - (y1 + u * vy));
+  }
+  // distance along a ray to a box (Infinity if missed or starting inside)
+  function rayRect(ox, oy, dx, dy, [x, y, w, h]) {
+    let t0 = -Infinity, t1 = Infinity;
+    if (dx !== 0) { let a = (x - ox) / dx, b = (x + w - ox) / dx; if (a > b) { const c = a; a = b; b = c; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
+    else if (ox < x || ox > x + w) return Infinity;
+    if (dy !== 0) { let a = (y - oy) / dy, b = (y + h - oy) / dy; if (a > b) { const c = a; a = b; b = c; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
+    else if (oy < y || oy > y + h) return Infinity;
+    if (t1 < t0 || t0 < 0) return Infinity;
+    return t0;
+  }
+  function laserOn(lz, t) { return (t + lz[6]) % (lz[4] + lz[5]) < lz[4]; }
   function resolve(p, [x, y, w, h], g = 1) {
     const R = T.R;
     const cx = Math.max(x, Math.min(p.x, x + w)), cy = Math.max(y, Math.min(p.y, y + h));
@@ -141,6 +171,27 @@ const CORE = (() => {
     if (ny * g < -0.7) p.grounded = true;
   }
 
+  function resolveMv(r, rect, wvx, wvy, knock, j) {
+    const p = r.p, R = T.R, [x, y, w, h] = rect;
+    const cx = Math.max(x, Math.min(p.x, x + w)), cy = Math.max(y, Math.min(p.y, y + h));
+    const dx = p.x - cx, dy = p.y - cy, d2 = dx * dx + dy * dy;
+    if (d2 >= R * R) return;
+    let nx, ny, push;
+    if (d2 > 1e-6) { const d = Math.sqrt(d2); nx = dx / d; ny = dy / d; push = R - d; }
+    else {
+      const l = p.x - x, rr = x + w - p.x, t = p.y - y, b = y + h - p.y, m = Math.min(l, rr, t, b);
+      if (m === l) { nx = -1; ny = 0; } else if (m === rr) { nx = 1; ny = 0; } else if (m === t) { nx = 0; ny = -1; } else { nx = 0; ny = 1; }
+      push = m + R;
+    }
+    p.x += nx * push; p.y += ny * push;
+    const vn = (p.vx - wvx) * nx + (p.vy - wvy) * ny;
+    if (vn < 0) { p.vx -= (1 + T.BOUNCE) * vn * nx; p.vy -= (1 + T.BOUNCE) * vn * ny; }
+    if (knock > 0 && r.knockCd === 0 && wvx * nx + wvy * ny > 0.3) {
+      p.vx += nx * knock; p.vy += ny * knock; r.knockCd = 12; r.events.push('knock');
+    }
+    if (ny * r.g < -0.7) { p.grounded = true; r.plat = j; }
+  }
+
   const pts = a => (a || []).map(([x, y]) => ({ x, y, cd: 0 }));
   function newRun(i, diff = 'medium') {
     const L = LEVELS[i], d = DIFF[diff], ammo = L.ammo + d.ammo;
@@ -148,6 +199,7 @@ const CORE = (() => {
       orbs: pts(L.o), reds: pts(L.red), purs: pts(L.pur), gravs: pts(L.grav),
       tps: (L.tp || []).map(([ax, ay, bx, by]) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, cd: 0 })),
       g: 1, gravCd: 0, lastTp: null, rope: null, phased: false, phaseCd: 0,
+      plat: -1, knockCd: 0, deathBy: '', ships: (L.ship || []).map(() => ({ lock: null })),
       t: 0, shots: 0, started: false, done: false, dead: false, lockWarn: false, events: [] };
   }
 
@@ -170,8 +222,34 @@ const CORE = (() => {
     for (const list of [r.orbs, r.reds, r.purs, r.gravs, r.tps]) for (const o of list) if (o.cd > 0) o.cd--;
     if (r.phaseCd > 0) r.phaseCd--;
     if (r.gravCd > 0) r.gravCd--;
+    if (r.knockCd > 0) r.knockCd--;
+    const sp = r.d.spike, tau = r.t * sp, mv = L.mv || [];
+    const killR = T.R - r.d.hit;
+
+    // gunships: lock on at the start of each cycle, charge, then fire a wall-blocked beam
+    for (let j = 0; j < r.ships.length; j++) {
+      const sh = L.ship[j], st = r.ships[j], cyc = (tau + sh[6]) % sh[5];
+      if (cyc < sp) {
+        const [ox, oy] = shipAt(sh, tau);
+        let dx = p.x - ox, dy = p.y - oy; const dl = len2(dx, dy);
+        if (dl > 0) { dx /= dl; dy /= dl; } else { dx = 0; dy = 1; }
+        let tmin = Infinity;
+        for (const b of border) tmin = Math.min(tmin, rayRect(ox, oy, dx, dy, b));
+        for (const b of (L.s || [])) tmin = Math.min(tmin, rayRect(ox, oy, dx, dy, b));
+        if (tmin === Infinity) tmin = 2000;
+        st.lock = { ox, oy, ex: ox + dx * tmin, ey: oy + dy * tmin };
+        r.events.push('charge');
+      }
+      st.firing = st.lock !== null && cyc >= SHIP_CHARGE && cyc < SHIP_CHARGE + SHIP_FIRE;
+      if (st.firing && cyc - sp < SHIP_CHARGE) r.events.push('beam');
+    }
 
     for (let i = 0; i < SUB; i++) {
+      const tPrev = (r.t - 1 + i / SUB) * sp, tNow = (r.t - 1 + (i + 1) / SUB) * sp;
+      if (r.plat >= 0 && !r.phased) { // ride the elevator you're standing on
+        const a = mvAt(mv[r.plat], tPrev), b = mvAt(mv[r.plat], tNow);
+        p.x += b[0] - a[0]; p.y += b[1] - a[1];
+      }
       p.vy += T.GRAV * r.g / SUB; p.x += p.vx / SUB; p.y += p.vy / SUB;
       if (r.rope) { // rope: can go slack, can't stretch
         const o = r.rope.o, dx = p.x - o.x, dy = p.y - o.y, d = len2(dx, dy);
@@ -181,12 +259,30 @@ const CORE = (() => {
           const vr = p.vx * nx + p.vy * ny; if (vr > 0) { p.vx -= vr * nx; p.vy -= vr * ny; }
         }
       }
-      const was = p.grounded; p.grounded = false;
+      const was = p.grounded; p.grounded = false; r.plat = -1;
       for (const s of border) resolve(p, s, r.g);
-      if (!r.phased) for (const s of (L.s || [])) resolve(p, s, r.g);
+      if (!r.phased) {
+        for (const s of (L.s || [])) resolve(p, s, r.g);
+        for (let j = 0; j < mv.length; j++) {
+          const a = mvAt(mv[j], tPrev), b = mvAt(mv[j], tNow);
+          resolveMv(r, b, (b[0] - a[0]) * SUB, (b[1] - a[1]) * SUB, mv[j].length > 7 ? mv[j][7] : 0, j);
+        }
+        // crushed: still buried in something solid after every push-out
+        let crushed = false;
+        for (let j = 0; j < mv.length; j++) if (overlap(p.x, p.y, T.R - 5, mvAt(mv[j], tNow))) crushed = true;
+        for (const s of (L.s || [])) if (overlap(p.x, p.y, T.R - 5, s)) crushed = true;
+        for (const s of border) if (overlap(p.x, p.y, T.R - 5, s)) crushed = true;
+        if (crushed) { r.dead = true; r.deathBy = 'crush'; r.events.push('dead'); return 'dead'; }
+      }
       if (p.grounded && !was && p.ammo < r.ammo) r.events.push('land');
       if (p.grounded) p.ammo = r.ammo;
-      for (const k of (L.k || [])) if (overlap(p.x, p.y, T.R - r.d.hit, spikeAt(k, r.t * r.d.spike))) { r.dead = true; r.events.push('dead'); return 'dead'; }
+      for (const k of (L.k || [])) if (overlap(p.x, p.y, killR, spikeAt(k, tau))) { r.dead = true; r.deathBy = 'spike'; r.events.push('dead'); return 'dead'; }
+      for (const lz of (L.lz || [])) if (laserOn(lz, tau) && distSeg(p.x, p.y, lz[0], lz[1], lz[2], lz[3]) < killR + 2) { r.dead = true; r.deathBy = 'laser'; r.events.push('dead'); return 'dead'; }
+      for (let j = 0; j < r.ships.length; j++) {
+        const st = r.ships[j], [sx, sy] = shipAt(L.ship[j], tau);
+        if (len2(p.x - sx, p.y - sy) < killR + SHIP_BODY) { r.dead = true; r.deathBy = 'ship'; r.events.push('dead'); return 'dead'; }
+        if (st.firing && distSeg(p.x, p.y, st.lock.ox, st.lock.oy, st.lock.ex, st.lock.ey) < killR + 3) { r.dead = true; r.deathBy = 'beam'; r.events.push('dead'); return 'dead'; }
+      }
     }
     p.vx *= p.grounded ? T.FRICTION : T.DRAG;
 
@@ -222,7 +318,7 @@ const CORE = (() => {
     return null;
   }
 
-  return { T, W, H, DIFF, PAR, border, LEVELS, newRun, fire, tick, overlap, spikeAt };
+  return { T, W, H, DIFF, PAR, border, LEVELS, newRun, fire, tick, overlap, spikeAt, mvAt, shipAt, laserOn, distSeg, rayRect, SHIP_CHARGE, SHIP_FIRE, SHIP_BODY };
 })();
 if (typeof module !== 'undefined') module.exports = CORE;
 </script>

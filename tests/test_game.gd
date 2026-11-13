@@ -79,20 +79,41 @@ func _initialize() -> void:
 	game._pad_button(JOY_BUTTON_START)
 	check(game.view == "menu", "Start opens level select")
 	game._pad_button(JOY_BUTTON_DPAD_RIGHT); game._pad_button(JOY_BUTTON_DPAD_DOWN)
-	check(game.menu_sel == 7, "D-pad moves the selection")
+	check(game.menu_sel == 11, "D-pad moves the selection (right 1, down a row of 10)")
 	game._pad_button(JOY_BUTTON_RIGHT_SHOULDER)
 	check(game.diff == "hard", "RB changes difficulty")
 	game._pad_button(JOY_BUTTON_A)
-	check(game.view == "play" and game.li == 7 and game.diff == "hard", "A starts the selected level")
+	check(game.view == "play" and game.li == 11 and game.diff == "hard", "A starts the selected level")
 	game.aim = Vector2(game.sim.px, game.sim.py - 120)
 	game._pad_button(JOY_BUTTON_A)
 	check(game.sim.shots == 1, "A fires")
+
+	# new hazards through the real game
+	game.set_diff("medium"); game.load_level(30)   # 7-1 Lift
+	var plat: Array = game.sim.L.mv[0]
+	game.sim.started = true
+	game.sim.px = float(plat[0]) + 60.0; game.sim.py = float(plat[1]) - 11.5
+	var y0: float = game.sim.py
+	for i in 40: game.sim.tick()
+	check(not game.sim.dead and game.sim.py < y0 - 60.0, "elevator carries the player")
+	var deaths_before: int = game.deaths
+	game.load_level(40)                         # 9-1 Gate (laser at x 480)
+	game.aim = Vector2(game.sim.px, 0); game.press()
+	game.sim.px = 480.0; game.sim.py = 300.0; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(3)
+	check(game.deaths == deaths_before + 1 and game.li == 40 and game.sim.shots == 0, "laser kills and the level restarts")
+	game.load_level(45)                         # 10-1 Sentry
+	game.sim.started = true
+	for i in 200:
+		if game.sim.tick() != "": break
+	check(game.sim.ships[0].lock != null, "gunship locks on to the player")
+	check(game.level_code(12) == "3-3" and game.level_code(55) == "F6", "level codes read world-level")
 
 	# neon wall colour: follows difficulty by default, or the level's world
 	game.neon_mode = "difficulty"; game.set_diff("master"); game.load_level(0)
 	check(game.neon() == game.NEON_BY_DIFF["master"], "neon walls follow difficulty")
 	game.toggle_neon(); game.load_level(16)
-	check(game.neon_mode == "world" and game.neon() == Color(game.NEON_BY_WORLD[16]), "T switches neon to per-world colours")
+	check(game.neon_mode == "world" and game.neon() == game.world_color(16), "T switches neon to per-world colours")
 	game.view = "menu"; game.aim = game.NEON_BOX.get_center(); game.press()
 	check(game.neon_mode == "difficulty", "level-screen button switches it back")
 	var saved = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
