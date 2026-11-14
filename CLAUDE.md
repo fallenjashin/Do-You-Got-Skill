@@ -73,7 +73,10 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 
 ## Open items / next steps
 
-- **Par:** easy/medium/hard are filled; **master (also used by God Mode) is still empty**, and a few
+- **Finals par is empty** ("—"): par.js's budget is too small for 3 screens. On Easy/Medium you
+  arrive standing, so finals par = sum of per-screen pars (run par on each screen as its own level,
+  like rooms.js does). Hard+ can do better by carrying speed, so set it by hand from good runs.
+- **Par:** easy/medium/hard are filled for levels 1-50; **master (also used by God Mode) is still empty**, and a few
   levels have no par yet (search found no win): 25, 43, 44, 45, 50 on some difficulties. Par is stored
   in `tools/levels/par.json` keyed by a fingerprint of level + difficulty + tuning (editing a level drops
   only its par). Run `node tools/bot/par.js master 0-29` (and `30-59`) — about 1 h per half on 2 cores;
