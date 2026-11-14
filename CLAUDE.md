@@ -26,8 +26,8 @@ with GitHub Desktop and press F5 in Godot.
   copy of the physics used by the bots; it **must stay identical to `sim.gd`**.
 - `tools/bot/`: Node bots that read `data/levels.json`. `check.js` (solver: beatable? which mechanics
   used?), `par.js` (fewest-shot par), `rates.js` (random-play difficulty), `golden.js` (reference runs).
-- `tests/test_parity.gd` (replays 598 JS reference runs in Godot; must all match) and
-  `tests/test_game.gd` (drives the real scene; 67 checks). CI runs both on every push.
+- `tests/test_parity.gd` (replays 598 JS reference runs in Godot, plus every stored par path; must all match) and
+  `tests/test_game.gd` (drives the real scene; 78 checks). CI runs both on every push.
 - `.github/workflows/web.yml`: tests, then exports Web and deploys GitHub Pages
   (https://fallenjashin.github.io/Do-You-Got-Skill/).
 - `marketing/`: title screen and transparent neon sign PNGs. `CREDITS.md`: required attributions.
@@ -66,12 +66,19 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 
 ## Open items / next steps
 
-- **Par:** easy/medium/hard are filled; **master (also used by God Mode) is still empty**, and a few
-  levels have no par yet (search found no win): 25, 43, 44, 45, 50 on some difficulties. Par is stored
-  in `tools/levels/par.json` keyed by a fingerprint of level + difficulty + tuning (editing a level drops
-  only its par). Run `node tools/bot/par.js master 0-29` (and `30-59`) — about 1 h per half on 2 cores;
-  a cloud background job is killed at 2 h, so run halves — then
-  `python3 tools/levels/build_levels.py --par master '<the printed array>'`. Re-runs only ever lower par.
+- **Par (bot v2):** `par.js` starts each run frozen (no waiting before the first shot), prunes at
+  `shots >= best`, puts rough velocity (3 speeds × 8 directions) in the state label, records the
+  winning moves `[[tick, dx, dy], ...]` (dx,dy = blast direction) and re-verifies them by replaying
+  from scratch; if no win is found it searches for any win, then improves it. Run
+  `node tools/bot/par.js <diff> 0-29 /tmp/x.jsonl` (and `30-59`), then
+  `python3 tools/levels/build_levels.py --par-file /tmp/x.jsonl`. Stored in `tools/levels/par.json`
+  keyed by a fingerprint of level + difficulty + tuning + `PAR_BOT_VERSION` (bump it when the bot
+  changes; old values are dropped). Re-runs only ever lower par. `build_levels.py` writes `par` and
+  `par_paths` into levels.json. **Status: see which difficulties are filled in `data/levels.json`.**
+  Cloud background jobs die a few minutes after a reply ends: run them in the foreground in chunks.
+- **Watch par** (game.gd `watch_par`, `_replay_step`): P / results button replays `par_paths` through the
+  real sim with a 50-tick look before the first shot; input locked; never saves records or ghosts;
+  off in God Mode. `test_parity.gd` checks every stored path wins at exactly par.
 - **Web deploy:** `tools/web/cachebust.sh` (unique game-data name) and `tools/web/smoke.py` (headless
   Chrome must load the build, reach a level and fire; nothing deploys otherwise). Run both locally
   after a web export if you touch the export or the HTML.

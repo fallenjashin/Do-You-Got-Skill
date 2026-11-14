@@ -46,4 +46,37 @@ func _init() -> void:
 					int(c.level) + 1, c.diff, c.kind, want, int(c.t), got, sim.t, sim.shots, int(c.shots), err])
 	print("parity: %d/%d runs match the prototype (outcomes %s), worst position error %s px" % [
 		cases.size() - failed, cases.size(), by_result, worst])
-	quit(1 if failed > 0 else 0)
+	var bad_paths := _check_par_paths()
+	quit(1 if failed > 0 or bad_paths > 0 else 0)
+
+
+## Every stored par path ("Watch par") must win in Godot with exactly par shots.
+func _check_par_paths() -> int:
+	var data: Dictionary = JSON.parse_string(FileAccess.open("res://data/levels.json", FileAccess.READ).get_as_text())
+	var paths: Dictionary = data.get("par_paths", {})
+	var total := 0
+	var bad := 0
+	for diff in paths:
+		var table: Array = paths[diff]
+		for i in table.size():
+			if table[i] == null:
+				continue
+			total += 1
+			var path: Array = table[i]
+			var sim = Sim.new(i, diff)
+			var k := 0
+			var res := ""
+			for f in 6000:
+				while k < path.size() and int(path[k][0]) == sim.t:
+					sim.fire(float(path[k][1]), float(path[k][2]))
+					k += 1
+				res = sim.tick()
+				sim.events.clear()
+				if res != "":
+					break
+			var want: int = int(data.par[diff][i])
+			if res != "win" or sim.shots != want:
+				bad += 1
+				print("PAR PATH BROKEN level %d %s: got %s with %d shots, par %d" % [i + 1, diff, res, sim.shots, want])
+	print("par paths: %d/%d replay to a win at par" % [total - bad, total])
+	return bad

@@ -23,6 +23,9 @@ import hashlib, json, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PATH = os.path.join(ROOT, "data", "levels.json")
 PAR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "par.json")
+# Bumped whenever tools/bot/par.js changes in a way that makes old par untrustworthy;
+# it's part of the fingerprint, so par from an older bot is dropped instead of kept.
+PAR_BOT_VERSION = 2
 
 FLOOR = lambda x0, x1: [x0, 500, x1 - x0, 20]        # spike strip on the floor
 CEIL = lambda x0, x1: [x0, 20, x1 - x0, 22]          # spike strip on the ceiling
@@ -277,47 +280,67 @@ def build():
     # Par lives in par.json, tied to a fingerprint of each level + difficulty + physics tuning.
     # Change a level and only that level's par is dropped ("—" in game) until par.js is re-run.
     data["par"] = {}
+    data["par_paths"] = {}
     store = json.load(open(PAR_PATH)) if os.path.exists(PAR_PATH) else {}
     stale = 0
     for diff, entries in store.items():
         if diff not in data["difficulties"]:
             continue
-        row = []
+        row, paths = [], []
         for i, lvl in enumerate(levels):
             e = entries.get(str(i))
             ok = e is not None and e["fp"] == fingerprint(data, lvl, diff)
             stale += e is not None and not ok
             row.append(e["par"] if ok else None)
+            paths.append(e.get("path") if ok else None)
         data["par"][diff] = row
+        data["par_paths"][diff] = paths  # the bot's winning moves: [[tick, dx, dy], ...] (blast direction)
     json.dump(data, open(PATH, "w"), indent=1)
     print(f"wrote {len(levels)} levels to {PATH}" + (f" ({stale} par values out of date: re-run par.js)" if stale else ""))
 
 
 def fingerprint(data, lvl, diff):
-    blob = json.dumps([lvl, data["difficulties"][diff], data["tuning"]], sort_keys=True)
+    blob = json.dumps([lvl, data["difficulties"][diff], data["tuning"], PAR_BOT_VERSION], sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
 
-def save_par(diff, values):
-    """Store par.js output, e.g. save_par("medium", [2, 3, null, ...])."""
+def save_par_file(jsonl_path):
+    """Merge par.js output lines {"diff","level","par","path"} into par.json.
+
+    par.js is a random search, so its answer is an upper bound. For each level as it is now, keep
+    the lowest par ever found together with the moves that achieved it (on a tie, keep the old moves).
+    """
     data = json.load(open(PATH))
     store = json.load(open(PAR_PATH)) if os.path.exists(PAR_PATH) else {}
-    # par.js is a random search, so its answer is an upper bound. Keep the lowest value ever
-    # found for the level as it is now: re-running par.js can only make par tighter.
-    old, row = store.get(diff, {}), {}
-    for i, (lvl, v) in enumerate(zip(data["levels"], values)):
-        fp = fingerprint(data, lvl, diff)
-        prev = old.get(str(i))
-        best = [x for x in [v, prev["par"] if prev and prev["fp"] == fp else None] if x is not None]
-        if best:
-            row[str(i)] = {"par": min(best), "fp": fp}
-    store[diff] = row
+    added = 0
+    for line in open(jsonl_path):
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        if r["par"] is None or not r.get("path"):
+            continue
+        diff, i = r["diff"], int(r["level"])
+        fp = fingerprint(data, data["levels"][i], diff)
+        row = store.setdefault(diff, {})
+        prev = row.get(str(i))
+        if prev and prev["fp"] == fp and prev.get("path") and prev["par"] <= r["par"]:
+            continue
+        row[str(i)] = {"par": r["par"], "path": r["path"], "fp": fp}
+        added += 1
+    # drop entries whose fingerprint no longer matches (older bot or changed level)
+    for diff, row in store.items():
+        if diff not in data["difficulties"]:
+            continue
+        for i in list(row):
+            if row[i]["fp"] != fingerprint(data, data["levels"][int(i)], diff):
+                del row[i]
     json.dump(store, open(PAR_PATH, "w"), indent=1, sort_keys=True)
+    print(f"stored {added} par values from {jsonl_path}")
 
 
 if __name__ == "__main__":
     # python3 build_levels.py                         rebuild data/levels.json
-    # python3 build_levels.py --par medium '[2,3,..]' store par.js output, then rebuild
-    if len(sys.argv) == 4 and sys.argv[1] == "--par":
-        save_par(sys.argv[2], json.loads(sys.argv[3]))
+    # python3 build_levels.py --par-file out.jsonl   store par.js output (par + moves), then rebuild
+    if len(sys.argv) == 3 and sys.argv[1] == "--par-file":
+        save_par_file(sys.argv[2])
     build()
