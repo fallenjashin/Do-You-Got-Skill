@@ -1,4 +1,4 @@
-# Recoil (working title)
+# Do You Got Skill
 
 You can't walk. You only move by firing a blast, which pushes you the opposite way.
 60 levels: 10 worlds of 5 (each world teaches one mechanic and ramps up), then 10 finals that combine
@@ -169,6 +169,6 @@ node golden.js                  # re-record the reference runs, then run tests/t
 ## Next steps
 
 1. **Visual level editor:** place walls, spikes and orbs in the Godot editor instead of typing coordinates.
-2. **Theme, name and art:** "Recoil" is already used by other Steam games.
+2. **Name check:** the game is "Do You Got Skill" (internal project name renamed from "Recoil", which other Steam games use). Search Steam for the name before making a store page.
 3. **Steam integration:** GodotSteam for leaderboards (time and fewest shots), plus replay upload so records can be verified.
 4. **More levels:** a commercial release needs roughly 60–100.

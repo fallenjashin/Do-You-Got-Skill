@@ -1,5 +1,5 @@
 extends Node2D
-## Recoil — game layer: input, drawing, menus, difficulties, God mode, saving.
+## Do You Got Skill — game layer: input, drawing, menus, difficulties, God mode, saving.
 ## All rules/physics live in sim.gd. Everything is drawn with shapes for now;
 ## swap in sprites once the art direction is decided.
 
@@ -101,11 +101,13 @@ func _ready() -> void:
 	add_child(title)
 	load_level(last_level)
 	view = "title"
+	print("GAME READY: %d levels" % data.levels.size())   # the web smoke test waits for this line
 
 
 # ---------------------------------------------------------------- save / load
 
 func _load_save() -> void:
+	_migrate_old_save()
 	if not FileAccess.file_exists(save_path):
 		return
 	var parsed = JSON.parse_string(FileAccess.open(save_path, FileAccess.READ).get_as_text())
@@ -116,6 +118,17 @@ func _load_save() -> void:
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
 		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, data.levels.size() - 1)
+
+
+## The project used to be called "Recoil", and Godot keeps user:// in a folder named after the
+## project. After the rename, copy the old save across once so nobody loses their records.
+func _migrate_old_save() -> void:
+	if save_path != "user://save.json" or FileAccess.file_exists(save_path):
+		return
+	var old := OS.get_user_data_dir().get_base_dir().path_join("Recoil").path_join("save.json")
+	if FileAccess.file_exists(old):
+		DirAccess.make_dir_recursive_absolute(OS.get_user_data_dir())   # may not exist yet
+		DirAccess.copy_absolute(old, ProjectSettings.globalize_path(save_path))
 
 
 func _save() -> void:

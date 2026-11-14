@@ -50,20 +50,25 @@ jobs:
           godot --headless --path . --export-release "Web" build/web/index.html
           test -f build/web/index.wasm
 
-      # GitHub Pages lets browsers cache files for ~10 minutes, and the game data is always
-      # called index.pck, so players could get an old build. Give each build's game data a
-      # unique name (the commit id) so a new deploy is always a new file.
+      # Unique name for the game data each deploy, so browsers never load a stale build.
       - name: Cache-bust the game data
+        run: tools/web/cachebust.sh build/web "${GITHUB_SHA::8}"
+
+      # Open the build in real (headless) Chrome: it must load, reach a level and fire a shot
+      # with no errors. Nothing is published if this fails.
+      - name: Browser smoke test
         run: |
-          cd build/web
-          PCK="game-${GITHUB_SHA::8}.pck"
-          mv index.pck "$PCK"
-          sed -i "s/index\.pck/$PCK/g" index.html
-          # The loader uses config.mainPack, or "<executable>.pck" if it's missing, so set it.
-          sed -i "s/\"executable\":\"index\"/\"executable\":\"index\",\"mainPack\":\"$PCK\"/" index.html
-          grep -o 'GODOT_CONFIG = {[^;]*' index.html
-          grep -q "\"mainPack\":\"$PCK\"" index.html
-          ! grep -q 'index\.pck' index.html
+          pip install --quiet playwright
+          mkdir -p smoke
+          python3 tools/web/smoke.py build/web smoke
+
+      - name: Keep smoke-test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-smoke-screenshots
+          path: smoke
+          if-no-files-found: ignore
 
       - uses: actions/upload-pages-artifact@v3
         with:
