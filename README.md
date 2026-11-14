@@ -162,7 +162,8 @@ python3 tools/levels/build_levels.py
 cd tools/bot
 node check.js medium            # every level: beatable? search effort? which mechanics did wins use?
 node check.js master 40-44 3    # a range, 3 attempts each
-node par.js medium              # fewest-shot par for one difficulty (paste into data/levels.json "par")
+node par.js medium              # fewest-shot par for one difficulty (optional range: node par.js master 0-29)
+python3 ../levels/build_levels.py --par medium '[...]'   # store it (tools/levels/par.json); keeps the lowest ever found
 node golden.js                  # re-record the reference runs, then run tests/test_parity.gd
 ```
 

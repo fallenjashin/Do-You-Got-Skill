@@ -19,6 +19,8 @@ function minShots(i,diff,budget){
   }
   return best;
 }
+// node par.js <difficulty> [from-to]   e.g. "node par.js master 0-29" (levels outside the range print null)
 const diff=process.argv[2],out=[];
-for(let i=0;i<C.LEVELS.length;i++){let b=Infinity;for(let k=0;k<3;k++)b=Math.min(b,minShots(i,diff,25000));out.push(b);}
+const [lo,hi]=(process.argv[3]||'0-'+(C.LEVELS.length-1)).split('-').map(Number);
+for(let i=0;i<C.LEVELS.length;i++){if(i<lo||i>hi){out.push(null);continue;}let b=Infinity;for(let k=0;k<3;k++)b=Math.min(b,minShots(i,diff,25000));out.push(b);}
 console.log(diff+' '+JSON.stringify(out));

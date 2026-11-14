@@ -147,7 +147,7 @@ func level_total() -> int: return data.levels.size()
 
 func par(i: int):
 	var table: Array = data.par.get("master" if diff == "god" else diff, [])
-	return int(table[i]) if i < table.size() else null
+	return int(table[i]) if i < table.size() and table[i] != null else null
 
 
 func load_level(i: int) -> void:

@@ -66,8 +66,15 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 
 ## Open items / next steps
 
-- **Par is empty** for the 60-level set (shows "—"): run `node tools/bot/par.js <diff>` for
-  easy/medium/hard/master (slow; ~30+ min each) and put the results in `data/levels.json` → `par`.
+- **Par:** easy/medium/hard are filled; **master (also used by God Mode) is still empty**, and a few
+  levels have no par yet (search found no win): 25, 43, 44, 45, 50 on some difficulties. Par is stored
+  in `tools/levels/par.json` keyed by a fingerprint of level + difficulty + tuning (editing a level drops
+  only its par). Run `node tools/bot/par.js master 0-29` (and `30-59`) — about 1 h per half on 2 cores;
+  a cloud background job is killed at 2 h, so run halves — then
+  `python3 tools/levels/build_levels.py --par master '<the printed array>'`. Re-runs only ever lower par.
+- **Web deploy:** `tools/web/cachebust.sh` (unique game-data name) and `tools/web/smoke.py` (headless
+  Chrome must load the build, reach a level and fire; nothing deploys otherwise). Run both locally
+  after a web export if you touch the export or the HTML.
 - Playtesting with strangers; tune any level people find unfair.
 - Same-screen multiplayer race mode (recommended first multiplayer step), then Steam page,
   Steam leaderboards with replay-verified records and downloadable ghosts.
