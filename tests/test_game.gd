@@ -109,19 +109,26 @@ func _initialize() -> void:
 	check(game.sim.ships[0].lock != null, "gunship locks on to the player")
 	check(game.level_code(12) == "3-3" and game.level_code(55) == "F6", "level codes read world-level")
 
-	# music: right track per world group, looping, volume steps saved
-	game.set_diff("medium"); game.load_level(3)
-	check(game.music.current.ends_with("electronic_ambient.ogg") and game.music.is_playing(), "worlds 1-2 play Electronic Ambient")
-	game.load_level(12)
-	check(game.music.current.ends_with("cosmic_journey.ogg"), "worlds 3-4 play Cosmic Journey")
-	game.load_level(22)
-	check(game.music.current.ends_with("pink_bloom.ogg"), "worlds 5-6 play Pink Bloom")
-	game.load_level(30)
-	check(game.music.current.ends_with("code_injection.ogg"), "worlds 7-10 play Code Injection")
-	game.load_level(48)
-	check(game.music.current.ends_with("code_injection.ogg"), "same group keeps the same track")
-	game.load_level(55)
-	check(game.music.current.ends_with("electric_pulse.ogg") and game.music._active.stream.loop, "finals play Electric Pulse, looping")
+	# music: every world its own DavidKBD track; finals and God Mode have their own
+	game.set_diff("medium")
+	var expect := {0: "01_underbeat", 7: "02_behind_the_darkness", 12: "09_ghost_steps", 17: "10_space_echoes",
+		22: "05_into_the_code_abyss", 27: "04_secret_dissonance", 32: "03_synthetic_whisper", 37: "12_faceless_crowd",
+		42: "06_electric_inferno", 47: "08_sentinel_cloud", 52: "07_binary_chaos", 57: "11_i_a_s_growl", 59: "13_between_everyone_and_anyone"}
+	var all_ok := true
+	for lvl in expect:
+		game.load_level(lvl)
+		if game.music.current != expect[lvl] or not game.music.is_playing(): all_ok = false
+	check(all_ok, "each world, the finals and Final Exam play their own track")
+	game.load_level(43)
+	check(game.music.current == "06_electric_inferno", "levels in the same world keep the same track")
+	check(game.music._active.stream.loop, "music loops")
+	game.set_diff("god"); game.start_god()
+	check(game.music.current == "14_theres_someone_here", "God Mode has its own track")
+	game.set_diff("medium"); game.load_level(0)
+	game.view = "menu"; game.aim = game.CREDITS_BOX.get_center(); game.press()
+	check(game.view == "credits", "Credits button opens the credits screen")
+	game.press()
+	check(game.view == "menu", "clicking closes credits")
 	game.music_volume = 0.7; game.cycle_music()
 	check(game.music_volume == 0.4, "V lowers music 70% -> 40%")
 	game.view = "menu"; game.aim = game.MUSIC_BOX.get_center(); game.press(); game.press()

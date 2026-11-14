@@ -44,7 +44,7 @@ const C_SHIP := Color("#ff4d6d")
 var data: Dictionary
 var sim: Sim
 var li := 0
-var view := "play"            # "play" | "menu"
+var view := "play"            # "play" | "menu" | "credits"
 var diff := "medium"
 var aim_mode := "go"          # "go" = point where you want to fly, "fire" = point where the blast goes
 var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
@@ -133,7 +133,7 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
-	music.play_for_level(li)
+	music.play_for_level(li, one_life())
 
 
 ## Music volume steps: 100% → 70% → 40% → off → 100%
@@ -204,6 +204,7 @@ const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const AIM_BOX := Rect2(770, 26, 170, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 const MUSIC_BOX := Rect2(228, 26, 130, 30)
+const CREDITS_BOX := Rect2(846, 508, 94, 24)
 
 func menu_box(i: int) -> Rect2:
 	var col := i % 10
@@ -233,6 +234,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_M: toggle_aim()
 			KEY_T: toggle_neon()
 			KEY_V: cycle_music()
+			KEY_C: view = "menu" if view == "credits" else "credits"
 	elif e is InputEventJoypadButton and e.pressed:
 		using_pad = true
 		_pad_button(e.button_index)
@@ -277,7 +279,10 @@ func _pad_aim() -> void:
 
 
 func press() -> void:
+	if view == "credits":
+		view = "menu"; return
 	if view == "menu":
+		if hit(CREDITS_BOX): view = "credits"; return
 		if hit(AIM_BOX): toggle_aim(); return
 		if hit(NEON_BOX): toggle_neon(); return
 		if hit(MUSIC_BOX): cycle_music(); return
@@ -464,6 +469,8 @@ func _draw() -> void:
 		_draw_done()
 	if view == "menu":
 		_draw_menu()
+	elif view == "credits":
+		_draw_credits()
 
 
 func _draw_world() -> void:
@@ -818,3 +825,26 @@ func _draw_menu() -> void:
 		text(line, b.get_center().x, b.position.y + 42, 10, (C_ORB if mark != "" else C_GOAL) if bt != null else C_DIM)
 	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  time  shots/par  (★ under par)"
 	text(legend, W / 2, 528, 11, C_DIM)
+	draw_rect(CREDITS_BOX, C_PANEL_HI if hit(CREDITS_BOX) else C_PANEL)
+	text("Credits (C)", CREDITS_BOX.get_center().x, CREDITS_BOX.position.y + 16, 11, C_SUB, "c", true)
+
+
+## Required attributions: music (CC BY 4.0), engine (MIT), symbol font (Bitstream Vera).
+func _draw_credits() -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.96))
+	text("CREDITS", W / 2, 70, 28, C_TEXT, "c", true)
+	text("MUSIC", W / 2, 112, 13, C_ORB, "c", true)
+	text("\"Code Injection Dark Techno Music Pack\" by DavidKBD", W / 2, 136, 16, C_TEXT, "c", true)
+	text("davidkbd.itch.io  ·  davidkbd.com  ·  cover art and track names by Naitsel", W / 2, 158, 12, C_SUB)
+	text("Licensed under CC BY 4.0 (creativecommons.org/licenses/by/4.0). Tracks used unmodified; volume balanced in-game.", W / 2, 178, 12, C_SUB)
+	var titles := ["01 Underbeat", "02 Behind the Darkness", "03 Synthetic Whisper", "04 Secret Dissonance",
+		"05 Into the Code Abyss", "06 Electric Inferno", "07 Binary Chaos", "08 Sentinel Cloud", "09 Ghost Steps",
+		"10 Space Echoes", "11 I.A.'s Growl", "12 Faceless Crowd", "13 Between Everyone and Anyone", "14 There's Someone Here"]
+	for i in titles.size():
+		text(titles[i], 200 + (i / 7) * 330, 210 + (i % 7) * 20, 12, C_DIM, "l")
+	text("ENGINE", W / 2, 370, 13, C_ORB, "c", true)
+	text("Made with Godot Engine  ·  godotengine.org/license", W / 2, 392, 13, C_TEXT, "c")
+	text("© 2014-present Godot Engine contributors; © 2007-2014 Juan Linietsky, Ariel Manzur. MIT license.", W / 2, 410, 11, C_SUB)
+	text("FONT", W / 2, 442, 13, C_ORB, "c", true)
+	text("Menu symbols: DejaVu Sans (Bitstream Vera Fonts license)", W / 2, 462, 12, C_SUB)
+	text("click or press C to close", W / 2, 512, 12, C_DIM)

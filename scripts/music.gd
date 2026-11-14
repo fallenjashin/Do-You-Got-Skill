@@ -1,21 +1,39 @@
 extends Node
-## Background music: one looping track per group of worlds, crossfading when the group changes.
-##
-## Tracks are from itch.io (commercial use allowed; see CREDITS.md). They were trimmed of
-## leading silence, loudness-matched to -15 LUFS and converted to .ogg so they loop without gaps.
-## To change a track, save a new .ogg over the same file name, or edit TRACKS / track_for_level().
+## Background music: "Code Injection Dark Techno Music Pack" by DavidKBD (CC BY 4.0, see CREDITS.md).
+## Every world has its own track; the finals and God Mode have their own too.
+## The .ogg files are the artist's originals (designed to loop). Loudness differences between
+## tracks are evened out here with GAIN_DB rather than by editing the audio.
 
-const TRACKS := [
-	"res://assets/music/electronic_ambient.ogg",   # worlds 1-2   Recoil, Swing (learning; calmest)
-	"res://assets/music/cosmic_journey.ogg",       # worlds 3-4   Phase, Teleport
-	"res://assets/music/pink_bloom.ogg",           # worlds 5-6   Gravity, Moving Spikes
-	"res://assets/music/code_injection.ogg",       # worlds 7-10  Elevators, Pushers, Lasers, Gunships
-	"res://assets/music/electric_pulse.ogg",       # finals       (fastest, most intense)
+const DIR := "res://assets/music/"
+const WORLD_TRACKS := [
+	"01_underbeat",               # 1 Recoil
+	"02_behind_the_darkness",     # 2 Swing
+	"09_ghost_steps",             # 3 Phase (walking through walls)
+	"10_space_echoes",            # 4 Teleport
+	"05_into_the_code_abyss",     # 5 Gravity
+	"04_secret_dissonance",       # 6 Moving spikes
+	"03_synthetic_whisper",       # 7 Elevators
+	"12_faceless_crowd",          # 8 Pushers
+	"06_electric_inferno",        # 9 Lasers
+	"08_sentinel_cloud",          # 10 Gunships
 ]
+const FINALS_EARLY := "07_binary_chaos"                # F1-F5
+const FINALS_LATE := "11_i_a_s_growl"                  # F6-F9
+const FINAL_EXAM := "13_between_everyone_and_anyone"   # F10
+const GOD_MODE := "14_theres_someone_here"             # whole God Mode run
+
+# Measured integrated loudness (LUFS) -> gain that brings each track to about -14.5 LUFS.
+const GAIN_DB := {
+	"01_underbeat": -3.2, "02_behind_the_darkness": -3.0, "03_synthetic_whisper": -2.8,
+	"04_secret_dissonance": -0.3, "05_into_the_code_abyss": -2.4, "06_electric_inferno": -2.8,
+	"07_binary_chaos": -2.8, "08_sentinel_cloud": -0.9, "09_ghost_steps": -1.1,
+	"10_space_echoes": -0.6, "11_i_a_s_growl": -2.0, "12_faceless_crowd": -1.3,
+	"13_between_everyone_and_anyone": -3.0, "14_theres_someone_here": 0.2,
+}
 const FADE := 1.2  # seconds
 
 var volume := 0.7          # 0..1, changed from the level screen or with V
-var current := ""
+var current := ""          # track name currently playing
 var _active: AudioStreamPlayer
 var _idle: AudioStreamPlayer
 var _cache := {}
@@ -28,40 +46,39 @@ func _ready() -> void:
 	add_child(_idle)
 
 
-static func track_for_level(i: int) -> String:
-	if i >= 50: return TRACKS[4]   # finals
-	var world := i / 5             # 0-based world
-	if world <= 1: return TRACKS[0]
-	if world <= 3: return TRACKS[1]
-	if world <= 5: return TRACKS[2]
-	return TRACKS[3]
+static func track_for_level(i: int, god_mode := false) -> String:
+	if god_mode: return GOD_MODE
+	if i >= 59: return FINAL_EXAM
+	if i >= 55: return FINALS_LATE
+	if i >= 50: return FINALS_EARLY
+	return WORLD_TRACKS[i / 5]
 
 
-func _db(v: float) -> float:
-	return linear_to_db(v) if v > 0.001 else -80.0
+func _db() -> float:
+	if volume <= 0.001:
+		return -80.0
+	return linear_to_db(volume) + float(GAIN_DB.get(current, 0.0))
 
 
-func _load(path: String) -> AudioStream:
-	if not _cache.has(path):
+func _load(track: String) -> AudioStream:
+	if not _cache.has(track):
+		var path := DIR + track + ".ogg"
 		var s: AudioStream = load(path) if ResourceLoader.exists(path) else null
 		if s is AudioStreamOggVorbis or s is AudioStreamMP3:
 			s.loop = true
-		elif s is AudioStreamWAV:
-			s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			s.loop_end = int(s.get_length() * s.mix_rate)
-		_cache[path] = s
-	return _cache[path]
+		_cache[track] = s
+	return _cache[track]
 
 
 ## Start a track (crossfading from whatever is playing). Same track = keep playing.
-func play(path: String) -> void:
-	if path == current:
+func play(track: String) -> void:
+	if track == current:
 		return
-	var stream := _load(path)
+	var stream := _load(track)
 	if stream == null:
-		push_warning("Music file not found: " + path)
+		push_warning("Music file not found: " + DIR + track + ".ogg")
 		return
-	current = path
+	current = track
 	var old := _active
 	_active = _idle
 	_idle = old
@@ -69,19 +86,19 @@ func play(path: String) -> void:
 	_active.volume_db = -80.0
 	_active.play()
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_active, "volume_db", _db(volume), FADE)
+	tw.tween_property(_active, "volume_db", _db(), FADE)
 	if old.playing:
 		tw.tween_property(old, "volume_db", -80.0, FADE)
 		tw.chain().tween_callback(old.stop)
 
 
-func play_for_level(i: int) -> void:
-	play(track_for_level(i))
+func play_for_level(i: int, god_mode := false) -> void:
+	play(track_for_level(i, god_mode))
 
 
 func set_volume(v: float) -> void:
 	volume = clampf(v, 0.0, 1.0)
-	_active.volume_db = _db(volume)
+	_active.volume_db = _db()
 
 
 func is_playing() -> bool:

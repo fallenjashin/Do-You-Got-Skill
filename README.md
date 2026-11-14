@@ -25,6 +25,7 @@ the same frame, with the same shot count, within 0.0000000000005 px.
 | Switch aim style | M (or the button on the level screen) | — |
 | Neon wall colour: by difficulty / by world | T (or the button on the level screen) | — |
 | Music volume (100 / 70 / 40 / off) | V (or the button on the level screen) | — |
+| Credits | C (or the button on the level screen) | — |
 | Level screen | click a difficulty, then a level | LB/RB difficulty, D-pad pick, A play |
 
 ## Mechanics
@@ -76,22 +77,15 @@ anything visual goes in `game.gd`.
 
 ## Music
 
-| File | Plays in |
-|---|---|
-| `assets/music/electronic_ambient.ogg` | Worlds 1–2 (Recoil, Swing) |
-| `assets/music/cosmic_journey.ogg` | Worlds 3–4 (Phase, Teleport) |
-| `assets/music/pink_bloom.ogg` | Worlds 5–6 (Gravity, Moving Spikes) |
-| `assets/music/code_injection.ogg` | Worlds 7–10 (Elevators, Pushers, Lasers, Gunships) |
-| `assets/music/electric_pulse.ogg` | Finals |
+**"Code Injection Dark Techno Music Pack" by DavidKBD** (CC BY 4.0: credit required; see
+CREDITS.md and the in-game Credits screen). Each of the 10 worlds has its own track; Finals 1–5,
+Finals 6–9, the Final Exam and God Mode each have their own too. The files in `assets/music/`
+are the artist's untouched loops; loudness differences are evened out in `scripts/music.gd`
+(`GAIN_DB`). Tracks crossfade when the track changes. Volume: **V** or the "Music" button on the
+level screen (100% → 70% → 40% → off); it's saved.
 
-Tracks are from itch.io, licensed for commercial use. Artists and license notes: **CREDITS.md**.
-They were trimmed of leading silence, loudness-matched to -15 LUFS and converted to .ogg so they
-loop without gaps; they crossfade when you move between groups. Volume: **V** or the "Music" button
-on the level screen (100% → 70% → 40% → off); it's saved.
-
-**To change a track:** save a new `.ogg` over the same file name (`.mp3`/`.wav` also work if you
-update the path). To change which worlds use which song, edit `TRACKS` and `track_for_level()` at
-the top of `scripts/music.gd`.
+**To change which track plays where:** edit `WORLD_TRACKS` (and the finals / God Mode constants)
+at the top of `scripts/music.gd`.
 
 ## Share / play in a browser
 
