@@ -195,12 +195,36 @@ const CORE = (() => {
   const pts = a => (a || []).map(([x, y]) => ({ x, y, cd: 0 }));
   function newRun(i, diff = 'medium') {
     const L = LEVELS[i], d = DIFF[diff], ammo = L.ammo + d.ammo;
-    return { i, L, d, diff, ammo, p: { x: L.start[0], y: L.start[1], vx: 0, vy: 0, ammo, grounded: false },
+    return { i, L, d, diff, ammo, room: 0, rooms: [L].concat(L.rooms || []), entryAmmo: ammo,
+      p: { x: L.start[0], y: L.start[1], vx: 0, vy: 0, ammo, grounded: false },
       orbs: pts(L.o), reds: pts(L.red), purs: pts(L.pur), gravs: pts(L.grav),
       tps: (L.tp || []).map(([ax, ay, bx, by]) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, cd: 0 })),
       g: 1, gravCd: 0, lastTp: null, rope: null, phased: false, phaseCd: 0,
       plat: -1, knockCd: 0, deathBy: '', ships: (L.ship || []).map(() => ({ lock: null })),
       t: 0, shots: 0, started: false, done: false, dead: false, lockWarn: false, events: [] };
+  }
+
+  // multi-screen levels: the goal of every screen but the last is an exit teleporter.
+  // Shots carry over; speed carries over only on difficulties with "keep" (Hard and up).
+  function enterRoom(r, k, keepSpeed) {
+    const L = r.rooms[k], p = r.p;
+    r.room = k; r.L = L;
+    p.x = L.start[0]; p.y = L.start[1];
+    if (!keepSpeed) { p.vx = 0; p.vy = 0; }
+    p.grounded = false;
+    r.orbs = pts(L.o); r.reds = pts(L.red); r.purs = pts(L.pur); r.gravs = pts(L.grav);
+    r.tps = (L.tp || []).map(([ax, ay, bx, by]) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, cd: 0 }));
+    r.ships = (L.ship || []).map(() => ({ lock: null }));
+    r.g = 1; r.gravCd = 0; r.lastTp = null; r.rope = null; r.phased = false; r.phaseCd = 0;
+    r.plat = -1; r.knockCd = 0; r.lockWarn = false; r.entryAmmo = p.ammo;
+  }
+  // after dying on screen 2 or later: back to that screen's start, standing, with the shots you entered with
+  function respawn(r) {
+    if (!r.dead || r.room === 0) return false;
+    r.dead = false; r.deathBy = '';
+    const a = r.entryAmmo; r.p.vx = 0; r.p.vy = 0;
+    enterRoom(r, r.room, false); r.p.ammo = a; r.entryAmmo = a;
+    r.events.push('respawn'); return true;
   }
 
   function fire(r, dx, dy) {
@@ -313,12 +337,13 @@ const CORE = (() => {
     }
     if (len2(p.x - L.goal[0], p.y - L.goal[1]) < T.R + 16) {
       if (r.phased) { if (!r.lockWarn) { r.lockWarn = true; r.events.push('locked'); } }
+      else if (r.room < r.rooms.length - 1) { enterRoom(r, r.room + 1, !!r.d.keep); r.events.push('room'); }
       else { r.done = true; r.events.push('win'); return 'win'; }
     } else r.lockWarn = false;
     return null;
   }
 
-  return { T, W, H, DIFF, PAR, border, LEVELS, newRun, fire, tick, overlap, spikeAt, mvAt, shipAt, laserOn, distSeg, rayRect, SHIP_CHARGE, SHIP_FIRE, SHIP_BODY };
+  return { T, W, H, DIFF, PAR, border, LEVELS, newRun, fire, tick, respawn, overlap, spikeAt, mvAt, shipAt, laserOn, distSeg, rayRect, SHIP_CHARGE, SHIP_FIRE, SHIP_BODY };
 })();
 if (typeof module !== 'undefined') module.exports = CORE;
 </script>

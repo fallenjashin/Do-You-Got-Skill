@@ -63,6 +63,13 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 - Moving objects are drawn filled; static walls are neon outlines; anything red kills.
 - Music volume is in 1% steps (main-menu slider); V mutes. Starting a level from a menu restarts its song; retrying doesn't.
 - Leaderboard is a placeholder until there's a Steam app.
+- **Finals are 3 screens** (`rooms` in build_levels.py `ROOMS`). Screen 1 is the original layout; its
+  goal is an exit teleporter (green rings), the last screen ends on the green dot. Shots carry over
+  between screens; speed carries over on Hard/Master/God (`"keep": true` in difficulties), not on
+  Easy/Medium. Dying on screen 2+ respawns at that screen's start, clock keeps running (God Mode: still
+  one life). Every screen starts on safe floor (x < 200) so a respawn can't trap you. Finals records
+  use new slots (`key()` adds `:3s`), so old one-screen times don't count. Ghosts store
+  `x + 2000 * screen`. Check screens with `node tools/bot/rooms.js <diff> 50-59`.
 
 ## Open items / next steps
 

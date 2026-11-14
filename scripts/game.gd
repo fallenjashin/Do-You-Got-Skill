@@ -50,7 +50,8 @@ var diff := "medium"
 var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
 var aim := Vector2(W / 2, H / 2)
 var deaths := 0
-var rec: Array = []           # this attempt's path, for the ghost
+var rec: Array = []           # this attempt's path, for the ghost: x + GHOST_ROOM * screen, y
+const GHOST_ROOM := 2000.0
 var ghost = null
 var gi := 0
 var shake := 0.0
@@ -139,8 +140,10 @@ func _save() -> void:
 
 # ---------------------------------------------------------------- helpers
 
-func key(i: int) -> String: return diff + ":" + str(i)
-func skey(i: int) -> String: return "s:" + diff + ":" + str(i)
+func key(i: int) -> String: return diff + ":" + str(i) + _rv(i)
+func skey(i: int) -> String: return "s:" + diff + ":" + str(i) + _rv(i)
+## Multi-screen levels use new record slots, so times from the old one-screen versions don't count.
+func _rv(i: int) -> String: return ":3s" if data.levels[i].has("rooms") else ""
 func one_life() -> bool: return data.difficulties[diff].get("oneLife", false)
 func fmt(ticks: float) -> String: return "%.2fs" % (ticks / 60.0)
 func level_total() -> int: return data.levels.size()
@@ -407,7 +410,7 @@ func _physics_process(_delta: float) -> void:
 		return
 	var res := sim.tick()
 	if sim.started and not sim.done and not sim.dead:
-		rec.append(sim.px); rec.append(sim.py)
+		rec.append(sim.px + GHOST_ROOM * sim.room); rec.append(sim.py)
 		if ghost != null: gi = mini(gi + 2, ghost.size() - 2)
 	for ev in sim.events:
 		match ev:
@@ -424,6 +427,9 @@ func _physics_process(_delta: float) -> void:
 			"grav":
 				sfx.beep(700 if sim.g > 0 else 300, 0.22, "sine", 0.07, 300 if sim.g > 0 else 700)
 				burst(sim.px, sim.py, C_BLUE, 18, 4); shake = 4.0
+			"room":
+				burst(sim.px, sim.py, C_GOAL, 26, 5); shake = 5.0
+				sfx.beep(500, 0.18, "sine", 0.08, 1200)
 			"tp":
 				if sim.last_tp.size() == 4: burst(sim.last_tp[0], sim.last_tp[1], C_ORANGE, 16, 4)
 				burst(sim.px, sim.py, C_ORANGE, 16, 4); sfx.beep(1200, 0.1, "triangle", 0.06, 500)
@@ -437,7 +443,7 @@ func _physics_process(_delta: float) -> void:
 		if one_life():
 			god.flash = 150
 			start_god()
-		else:
+		elif not sim.respawn():
 			load_level(li)
 	elif res == "win":
 		sfx.beep(660, 0.1, "sine", 0.08)
@@ -615,9 +621,16 @@ func _draw_world() -> void:
 	_draw_moving_solids()
 	_draw_lasers(now)
 
-	# goal
+	# arrival teleporter (screens 2+): a faint ring where you came in
+	if sim.room > 0:
+		var ap := Vector2(float(L.start[0]), float(L.start[1]))
+		draw_arc(ap, 17, 0, TAU, 32, Color(C_GOAL, 0.25), 2.0)
+		draw_arc(ap, 17, now * 2.0, now * 2.0 + PI * 0.6, 12, Color(C_GOAL, 0.5), 2.0)
+	# goal: a solid green dot on the last screen, an exit teleporter (green rings) before that
 	var gp := Vector2(float(L.goal[0]), float(L.goal[1]))
-	if sim.phased:
+	if not sim.is_last_room():
+		_draw_exit_portal(gp, now)
+	elif sim.phased:
 		draw_circle(gp, 16, Color(0.47, 0.47, 0.55, 0.15)); draw_circle(gp, 9, Color("#555a70"))
 		draw_arc(gp, 16, 0, TAU, 32, C_PURPLE, 2.0)
 	else:
@@ -674,7 +687,9 @@ func _draw_world() -> void:
 
 	# ghost of your best run
 	if ghost != null and sim.started and gi < ghost.size():
-		draw_circle(Vector2(ghost[gi], ghost[gi + 1]), 11, Color(Color("#9fb4ff"), 0.35))
+		var groom := floori(float(ghost[gi]) / GHOST_ROOM)
+		if groom == sim.room:
+			draw_circle(Vector2(float(ghost[gi]) - GHOST_ROOM * groom, ghost[gi + 1]), 11, Color(Color("#9fb4ff"), 0.35))
 
 	for q in parts:
 		draw_rect(Rect2(q.x - 2, q.y - 2, 4, 4), Color(q.c, q.life))
@@ -711,6 +726,22 @@ func _draw_world() -> void:
 	_draw_death_face()
 	for i in sim.ammo_max:
 		draw_circle(Vector2(p.x - (sim.ammo_max - 1) * 5 + i * 10, p.y - 22), 3.5, C_SHOT if i < sim.ammo else Color(1, 1, 1, 0.15))
+
+
+## Exit teleporter to the next screen: two counter-rotating green rings around a dark core.
+## Hollow (not a dot) so it reads as "a way through", not "the finish".
+func _draw_exit_portal(gp: Vector2, now: float) -> void:
+	var col := Color("#555a70") if sim.phased else C_GOAL
+	glow(gp, 18, col, 0.6)
+	draw_circle(gp, 15, Color(C_BG, 0.9))
+	for k in 3:
+		var a := now * 2.4 + k * TAU / 3.0
+		draw_arc(gp, 18, a, a + 1.4, 12, col, 2.5)
+		var b := -now * 3.4 + k * TAU / 3.0
+		draw_arc(gp, 11, b, b + 1.2, 10, Color(col, 0.75), 2.0)
+	draw_circle(gp, 3.5 + sin(now * 6.0), Color(col, 0.9))
+	if sim.phased:
+		draw_arc(gp, 22, 0, TAU, 32, C_PURPLE, 2.0)
 
 
 ## Same face as the menu's neon ball: eyes look where you're aiming (where you want to go) and
@@ -835,8 +866,10 @@ func _draw_ships(now: float) -> void:
 func _draw_hud() -> void:
 	draw_rect(HUD_LEVELS, Color(C_PANEL_HI if hit(HUD_LEVELS) else Color(0.15, 0.17, 0.23, 0.9), ui_alpha))
 	text("☰ Levels", HUD_LEVELS.get_center().x, HUD_LEVELS.position.y + 20, 13, Color("#c6cde8"), "c", true)
-	text("%s  %s" % [level_code(li), sim.L.name], 126, 39, 15, Color("#c6cde8"), "l", true)
-	text(str(sim.L.get("world", "")).to_upper(), 126 + 90, 58, 12, world_color(li), "l", true)
+	var lv: Dictionary = sim.rooms[0]
+	var screens := "   screen %d/%d" % [sim.room + 1, sim.rooms.size()] if sim.rooms.size() > 1 else ""
+	text("%s  %s%s" % [level_code(li), lv.name, screens], 126, 39, 15, Color("#c6cde8"), "l", true)
+	text(str(lv.get("world", "")).to_upper(), 126 + 90, 58, 12, world_color(li), "l", true)
 	text(data.difficulties[diff].label.to_upper(), 126, 58, 12, DIFF_COLOR[diff], "l", true)
 	if one_life():
 		text("run %s   best run %s" % [fmt(god.total + (0 if sim.done else sim.t)), fmt(best["god:run"]) if best.has("god:run") else "—"], W - 34, 39, 15, Color("#c6cde8"), "r", true)
@@ -857,7 +890,7 @@ func _draw_hud() -> void:
 	if god.flash > 0 and one_life():
 		text("ONE LIFE — back to level 1", W / 2, 150, 26, Color(C_SPIKE, minf(1.0, god.flash / 40.0)), "c", true)
 	if not sim.started and view == "play":
-		var tip: String = sim.L.tip
+		var tip: String = sim.rooms[0].tip
 		if li == 0 and using_pad:
 			tip = "Point the stick where you want to fly, then press A. You launch that way."
 		text(tip, W / 2, 80, 15, C_SUB)

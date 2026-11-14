@@ -1,6 +1,6 @@
 // Exploration solver: remembers every new spot it reaches, restarts from promising spots, explores randomly.
 const C=require('./core_loader.js');
-function cellKey(r){const p=r.p;return [Math.floor(p.x/30),Math.floor(p.y/30),r.phased?1:0,r.g,r.rope?1:0,p.ammo,Math.floor(r.t/40)%4].join(',');}
+function cellKey(r){const p=r.p;return [r.room,Math.floor(p.x/30),Math.floor(p.y/30),r.phased?1:0,r.g,r.rope?1:0,p.ammo,Math.floor(r.t/40)%4].join(',');}
 function solve(i,budget=60000,diff="medium"){
   const start=C.newRun(i,diff);start.started=true;
   const arch=new Map();arch.set(cellKey(start),{s:structuredClone(start),v:0});

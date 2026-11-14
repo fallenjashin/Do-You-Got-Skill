@@ -1,6 +1,6 @@
 // Fewest-shots search: exploration solver where shots fired is part of the state, keeps the cheapest path to each spot.
 const C=require('./core_loader.js');
-function key(r){const p=r.p;return [Math.floor(p.x/30),Math.floor(p.y/30),r.phased?1:0,r.g,r.rope?1:0,p.ammo,Math.floor(r.t/40)%4,r.shots].join(',');}
+function key(r){const p=r.p;return [r.room,Math.floor(p.x/30),Math.floor(p.y/30),r.phased?1:0,r.g,r.rope?1:0,p.ammo,Math.floor(r.t/40)%4,r.shots].join(',');}
 function minShots(i,diff,budget){
   const s0=C.newRun(i,diff);s0.started=true;
   const arch=new Map();arch.set(key(s0),{s:structuredClone(s0),v:0});let keys=[...arch.keys()],best=Infinity;

@@ -68,7 +68,7 @@ Rule of thumb on screen: anything **filled** moves; outlined neon is a static wa
 | 3 | Phase | | 8 | Pushers |
 | 4 | Teleport | | 9 | Lasers |
 | 5 | Gravity | | 10 | Gunships |
-| F | Finals: 10 levels, 3+ mechanics each | | | |
+| F | Finals: 10 levels, 3+ mechanics each, 3 screens each (exit teleporter → next screen → green dot) | | | |
 
 ## Project layout
 
