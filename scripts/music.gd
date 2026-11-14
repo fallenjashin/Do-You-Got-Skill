@@ -1,14 +1,16 @@
 extends Node
 ## Background music: one looping track per group of worlds, crossfading when the group changes.
 ##
-## To use your own music, save it over one of the files below (same name), or change the
-## paths here. Godot plays .ogg (best), .mp3 and .wav. Make sure you have a license that
-## covers games, trailers and streaming.
+## Tracks are from itch.io (commercial use allowed; see CREDITS.md). They were trimmed of
+## leading silence, loudness-matched to -15 LUFS and converted to .ogg so they loop without gaps.
+## To change a track, save a new .ogg over the same file name, or edit TRACKS / track_for_level().
 
 const TRACKS := [
-	"res://assets/music/neon_drive.ogg",   # worlds 1-5   (levels 1-25)
-	"res://assets/music/overclock.ogg",    # worlds 6-10  (levels 26-50)
-	"res://assets/music/final_exam.ogg",   # finals       (levels 51-60)
+	"res://assets/music/electronic_ambient.ogg",   # worlds 1-2   Recoil, Swing (learning; calmest)
+	"res://assets/music/cosmic_journey.ogg",       # worlds 3-4   Phase, Teleport
+	"res://assets/music/pink_bloom.ogg",           # worlds 5-6   Gravity, Moving Spikes
+	"res://assets/music/code_injection.ogg",       # worlds 7-10  Elevators, Pushers, Lasers, Gunships
+	"res://assets/music/electric_pulse.ogg",       # finals       (fastest, most intense)
 ]
 const FADE := 1.2  # seconds
 
@@ -27,9 +29,12 @@ func _ready() -> void:
 
 
 static func track_for_level(i: int) -> String:
-	if i < 25: return TRACKS[0]
-	if i < 50: return TRACKS[1]
-	return TRACKS[2]
+	if i >= 50: return TRACKS[4]   # finals
+	var world := i / 5             # 0-based world
+	if world <= 1: return TRACKS[0]
+	if world <= 3: return TRACKS[1]
+	if world <= 5: return TRACKS[2]
+	return TRACKS[3]
 
 
 func _db(v: float) -> float:
