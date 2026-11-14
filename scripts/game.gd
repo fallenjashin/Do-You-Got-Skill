@@ -55,6 +55,7 @@ var ghost = null
 var gi := 0
 var shake := 0.0
 var parts: Array = []
+var death_face := {}          # X-eyed face that floats up from where you died: {x, y, g, life}
 var new_best := false
 var new_fewest := false
 var best := {}                # "diff:i" -> ticks, "s:diff:i" -> shots, "god:run", "god:shots"
@@ -385,6 +386,10 @@ func _physics_process(_delta: float) -> void:
 		q.x += q.vx; q.y += q.vy; q.vx *= 0.94; q.vy *= 0.94; q.life -= 0.03
 	parts = parts.filter(func(q): return q.life > 0)
 	if shake > 0: shake *= 0.85
+	if not death_face.is_empty():
+		death_face.life -= 1.0 / 40.0   # ~0.7 s; respawn stays instant, the face is just a ghost
+		death_face.y -= 0.6 * death_face.g
+		if death_face.life <= 0: death_face = {}
 	if view != "play":
 		return
 	var res := sim.tick()
@@ -414,6 +419,7 @@ func _physics_process(_delta: float) -> void:
 
 	if res == "dead":
 		deaths += 1; sfx.beep(90, 0.25, "sawtooth", 0.07); shake = 10.0
+		death_face = {"x": sim.px, "y": sim.py, "g": sim.g, "life": 1.0}
 		burst(sim.px, sim.py, C_SPIKE, 30)
 		if one_life():
 			god.flash = 150
@@ -689,6 +695,7 @@ func _draw_world() -> void:
 	else:
 		glow(p, 11, Color("#7aa2ff")); draw_circle(p, 11, C_TEXT)
 	_draw_eyes(p, now)
+	_draw_death_face()
 	for i in sim.ammo_max:
 		draw_circle(Vector2(p.x - (sim.ammo_max - 1) * 5 + i * 10, p.y - 22), 3.5, C_SHOT if i < sim.ammo else Color(1, 1, 1, 0.15))
 
@@ -707,6 +714,22 @@ func _draw_eyes(p: Vector2, now: float) -> void:
 			draw_line(e - Vector2(1.9, 0), e + Vector2(1.9, 0), ink, 1.4)
 		else:
 			draw_circle(e, 1.8, ink)
+
+
+## When you die, a faded copy of the ball with X eyes floats away from the spot (you respawn instantly).
+func _draw_death_face() -> void:
+	if death_face.is_empty(): return
+	var a: float = death_face.life
+	var c := Vector2(death_face.x, death_face.y)
+	var up: float = -1.7 * death_face.g
+	var ink := Color(Color("#1a1f33"), a)
+	draw_circle(c, 11, Color(C_TEXT, 0.55 * a))
+	for side in [-1.0, 1.0]:
+		var e := c + Vector2(side * 3.6, up)
+		draw_line(e - Vector2(1.8, 1.8), e + Vector2(1.8, 1.8), ink, 1.4)
+		draw_line(e - Vector2(1.8, -1.8), e + Vector2(1.8, -1.8), ink, 1.4)
+	# little "o" mouth
+	draw_arc(c + Vector2(0, -up * 1.6), 1.6, 0, TAU, 12, ink, 1.2)
 
 
 func _tau() -> float:
@@ -822,8 +845,8 @@ func _draw_hud() -> void:
 		text("ONE LIFE — back to level 1", W / 2, 150, 26, Color(C_SPIKE, minf(1.0, god.flash / 40.0)), "c", true)
 	if not sim.started and view == "play":
 		var tip: String = sim.L.tip
-		if li == 0:
-			tip = "Click where you want to fly. The blast fires the opposite way."
+		if li == 0 and using_pad:
+			tip = "Point the stick where you want to fly, then press A. You launch that way."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
 			"click / tap / space = fire  ·  R restart  ·  N / B next / back  ·  L levels  ·  Esc menu"

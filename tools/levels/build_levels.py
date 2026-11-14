@@ -28,7 +28,7 @@ CEIL = lambda x0, x1: [x0, 20, x1 - x0, 22]          # spike strip on the ceilin
 L = lambda name, tip, start, goal, ammo=2, **kw: dict(name=name, tip=tip, start=start, goal=goal, ammo=ammo, **kw)
 
 W1 = [  # ---------------------------------------------------------------- recoil basics
-    L("Hop", "Click where you want to fly. The blast fires the opposite way.", [80, 490], [880, 490],
+    L("Hop", "Point where you want to fly, then click. You launch that way.", [80, 490], [880, 490],
       s=[[440, 300, 40, 220]], k=[FLOOR(520, 760)]),
     L("Gap", "Shots refill when you land. Yellow orbs refill you mid-air.", [80, 490], [885, 490],
       k=[FLOOR(200, 800), [470, 20, 30, 150]], o=[[360, 320], [620, 320]]),

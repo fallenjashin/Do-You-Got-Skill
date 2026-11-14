@@ -95,7 +95,7 @@
  "levels": [
   {
    "name": "Hop",
-   "tip": "Click where you want to fly. The blast fires the opposite way.",
+   "tip": "Point where you want to fly, then click. You launch that way.",
    "start": [
     80,
     490
