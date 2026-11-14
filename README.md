@@ -33,7 +33,6 @@ Code: `scripts/title.gd`. Images of the sign for store pages / social posts are 
 | Aim | Mouse: point where you want to **go** (the neon arrow) | Either stick |
 | Fire | Click, tap or Space | A, RT or RB |
 | Restart | R | Y |
-| Watch par (the bot plays the level's fewest-shot run in real time) | P, or "Watch par" on the results screen; P/R stops it | Back/Select |
 | Next / previous level | N / B | — |
 | Level select | L, or the "☰ Levels" button | Start |
 | Main menu | Esc | B (from the level grid) |
@@ -132,7 +131,7 @@ cd tools/bot
 node solve.js            # can every level be beaten, and which mechanics did the solution use?
 node solve.js 5,23       # just levels 6 and 24 (0-based)
 node rates.js 8000       # random-play win rate per difficulty (a rough difficulty measure)
-node par.js medium 0-29 /tmp/pm.jsonl   # fewest-shot search (par) + the winning moves, one JSON line per level
+node par.js medium       # fewest-shot search for one difficulty (par)
 node golden.js           # re-record tests/golden_runs.json after an intentional physics change
 ```
 
@@ -163,8 +162,8 @@ python3 tools/levels/build_levels.py
 cd tools/bot
 node check.js medium            # every level: beatable? search effort? which mechanics did wins use?
 node check.js master 40-44 3    # a range, 3 attempts each
-node par.js medium 0-29 /tmp/pm.jsonl   # fewest-shot par + its moves (a range per run; ~1 h per half)
-python3 ../levels/build_levels.py --par-file /tmp/pm.jsonl   # store it (tools/levels/par.json); keeps the lowest ever found
+node par.js medium              # fewest-shot par for one difficulty (optional range: node par.js master 0-29)
+python3 ../levels/build_levels.py --par medium '[...]'   # store it (tools/levels/par.json); keeps the lowest ever found
 node golden.js                  # re-record the reference runs, then run tests/test_parity.gd
 ```
 

@@ -268,40 +268,6 @@ func _initialize() -> void:
 	check(game.sim.done and game.best.has("hard:%d:3s" % fi), "the green dot on screen 3 finishes; record goes in the 3-screen slot")
 	game.set_diff("medium")
 
-
-	# ---- "Watch par": the bot plays the stored par run through the real game
-	game.set_diff("medium"); game.load_level(0)
-	var pp = game.par_path(0)
-	check(pp != null and game.par(0) != null, "level 1 on medium has a par path to watch")
-	if pp != null:
-		var best_before = game.best.duplicate()
-		var ghost_before = game.ghosts.duplicate()
-		game._unhandled_input(_key(KEY_P))
-		check(not game.replay.is_empty() and game.view == "play", "P starts the par replay")
-		game.aim = Vector2(10, 10); game.press()
-		game._unhandled_input(_key(KEY_SPACE))
-		check(game.sim.shots == 0, "your clicks and Space don't fire while the bot plays")
-		ticks(game.REPLAY_LEAD - 1)
-		check(not game.sim.started, "the bot pauses before its first shot (hazards stay frozen)")
-		check(game.aim.distance_to(Vector2(game.sim.px, game.sim.py)) > 100, "the arrow shows where the bot will fly")
-		var guard := 0
-		while not game.sim.done and guard < 6000:
-			ticks(1); guard += 1
-		check(game.sim.done and game.sim.shots == int(game.par(0)), "the replay wins in exactly par shots")
-		check(game.best == best_before and game.ghosts == ghost_before, "a replay never sets your records or ghost")
-		game.aim = game.BTN_LEVELS.get_center(); game.press()
-		check(not game.replay.is_empty() and not game.sim.started, "Watch again restarts the replay")
-		ticks(game.REPLAY_LEAD + 5)
-		game._unhandled_input(_key(KEY_R))
-		check(game.replay.is_empty() and not game.sim.started, "R stops the replay and hands you the level")
-		game._unhandled_input(_key(KEY_P)); ticks(80)
-		game._unhandled_input(_key(KEY_ESCAPE))
-		check(game.replay.is_empty() and game.view == "main", "Esc leaves the replay for the main menu")
-		game.view = "play"
-	game.set_diff("god"); game.start_god()
-	game._unhandled_input(_key(KEY_P))
-	check(game.replay.is_empty() and game.notice.life > 0, "no par replays in God Mode (it says so)")
-	game.set_diff("medium"); game.load_level(0)
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()
 	quit(1 if failures else 0)

@@ -78,9 +78,6 @@ var restart_music := false   # set when a level is started from a menu
 var music_volume := 0.7        # 0..1 in 1% steps
 var music_unmuted := 0.7       # volume to come back to after unmuting
 var cursor_hidden := false     # the OS pointer is hidden while playing (we draw our own)
-var replay := {}               # "Watch par": {path, k, lead, done}; empty = you're playing
-var notice := {"text": "", "life": 0}   # short message under the HUD
-const REPLAY_LEAD := 50        # ticks the bot "looks" before its first shot (hazards stay frozen)
 var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
 
@@ -157,7 +154,6 @@ func par(i: int):
 
 
 func load_level(i: int) -> void:
-	replay = {}
 	li = posmod(i, level_total())
 	sim = Sim.new(li, diff)
 	view = "play"
@@ -254,63 +250,6 @@ func god_next() -> void:
 
 
 ## Direction the blast fires (you get pushed the opposite way).
-## The bot's par moves for this level on this difficulty: [[tick, dx, dy], ...] (blast direction), or null.
-func par_path(i: int):
-	var table: Array = data.get("par_paths", {}).get(diff, [])
-	return table[i] if i < table.size() else null
-
-
-## "Watch par": replay the bot's par run in real time through the real game.
-func watch_par() -> void:
-	if one_life():
-		show_notice("Par replays aren't available in God Mode")
-		return
-	var path = par_path(li)
-	if path == null or (path as Array).is_empty():
-		show_notice("No par replay for this level on %s yet" % data.difficulties[diff].label)
-		return
-	load_level(li)
-	replay = {"path": path, "k": 0, "lead": REPLAY_LEAD, "done": false}
-
-
-func stop_replay() -> void:
-	load_level(li)
-
-
-func show_notice(t: String) -> void:
-	notice = {"text": t, "life": 150}
-
-
-func _replay_step() -> void:
-	var path: Array = replay.path
-	var k: int = replay.k
-	var p := Vector2(sim.px, sim.py)
-	if k < path.size():  # the arrow shows where the next shot will send the ball
-		aim = p - Vector2(float(path[k][1]), float(path[k][2])).normalized() * 110.0
-	if not sim.started and replay.lead > 0:
-		replay.lead -= 1
-		return
-	while k < path.size() and int(path[k][0]) == sim.t:
-		fire_shot(Vector2(float(path[k][1]), float(path[k][2])))
-		k += 1
-	replay.k = k
-
-
-## One shot with its sound, shake and sparks (used by the player and the par replay).
-func fire_shot(dir: Vector2) -> bool:
-	if not sim.fire(dir.x, dir.y):
-		sfx.beep(120, 0.05, "square", 0.03)
-		return false
-	shake = 5.0
-	sfx.beep(180 + randf() * 40, 0.09, "sawtooth", 0.06)
-	var n := dir.normalized() if dir.length() > 0 else Vector2.DOWN
-	for i in 16:
-		var a := n.angle() + (randf() - 0.5) * 0.7
-		var s := 3.0 + randf() * 5.0
-		parts.append({"x": sim.px + n.x * 11, "y": sim.py + n.y * 11, "vx": cos(a) * s, "vy": sin(a) * s, "life": 1.0, "c": C_SHOT})
-	return true
-
-
 func fire_dir() -> Vector2:
 	var p := Vector2(sim.px, sim.py)
 	return p - aim   # you point where you want to go; the blast fires the opposite way
@@ -328,7 +267,6 @@ func burst(x: float, y: float, c: Color, n: int, sp := 6.0) -> void:
 const BTN_RETRY := Rect2(W / 2 - 215, 330, 130, 44)
 const BTN_LEVELS := Rect2(W / 2 - 65, 330, 130, 44)
 const BTN_NEXT := Rect2(W / 2 + 85, 330, 130, 44)
-const BTN_PAR := Rect2(W / 2 - 65, 386, 130, 34)
 const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 const MUSIC_BOX := Rect2(228, 26, 130, 30)
@@ -346,16 +284,6 @@ func hit(r: Rect2) -> bool: return r.has_point(aim)
 func _unhandled_input(e: InputEvent) -> void:
 	if view in TITLE_VIEWS:
 		return  # handled by title.gd
-	if not replay.is_empty() and view == "play" and not sim.done:
-		# the bot is playing: P/R stop it, Esc/L leave; everything else is ignored
-		if e is InputEventKey and e.pressed and not e.echo:
-			match e.keycode:
-				KEY_P, KEY_R: stop_replay()
-				KEY_ESCAPE: stop_replay(); open_main_menu()
-				KEY_L: stop_replay(); view = "menu"
-		elif e is InputEventJoypadButton and e.pressed and e.button_index in [JOY_BUTTON_BACK, JOY_BUTTON_Y, JOY_BUTTON_B]:
-			stop_replay()
-		return
 	if e is InputEventMouseMotion:
 		aim = e.position; using_pad = false
 	elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
@@ -375,7 +303,6 @@ func _unhandled_input(e: InputEvent) -> void:
 				if view == "credits": view = credits_back
 				else: open_main_menu()
 			KEY_T: toggle_neon()
-			KEY_P: if view == "play": watch_par()   # also "watch again" after a replay
 			KEY_V: toggle_mute()
 			KEY_C:
 				if view == "credits": view = credits_back
@@ -409,7 +336,6 @@ func _pad_button(b: int) -> void:
 				else: load_level(li + 1)
 			else: press()
 		JOY_BUTTON_Y: start_god() if one_life() else load_level(li)
-		JOY_BUTTON_BACK: watch_par()
 		JOY_BUTTON_START: menu_sel = li; view = "menu"
 
 
@@ -418,11 +344,11 @@ func _pad_aim() -> void:
 	var r := Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_X), Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y))
 	var l := Vector2(Input.get_joy_axis(0, JOY_AXIS_LEFT_X), Input.get_joy_axis(0, JOY_AXIS_LEFT_Y))
 	var s := r if r.length() >= l.length() else l
-	if s.length() > 0.35 and replay.is_empty():
+	if s.length() > 0.35:
 		using_pad = true
 		aim = Vector2(sim.px, sim.py) + s.normalized() * 120.0
 	var trig := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT) > 0.6
-	if trig and not trigger_was_down and view == "play" and not sim.done and replay.is_empty():
+	if trig and not trigger_was_down and view == "play" and not sim.done:
 		press()
 	trigger_was_down = trig
 
@@ -452,19 +378,20 @@ func press() -> void:
 				elif hit(BTN_LEVELS): view = "menu"
 			else: god_next()
 			return
-		if not replay.is_empty():
-			if hit(BTN_RETRY): stop_replay()
-			elif hit(BTN_LEVELS): watch_par()
-			elif hit(BTN_NEXT): load_level(li + 1)
-			return
-		if hit(BTN_PAR): watch_par(); return
 		if hit(BTN_RETRY): load_level(li)
 		elif hit(BTN_LEVELS): view = "menu"
 		elif hit(BTN_NEXT): load_level(li + 1)
 		return
-	if not replay.is_empty():
-		return  # the bot is playing
-	fire_shot(fire_dir())
+	var dir := fire_dir()
+	if not sim.fire(dir.x, dir.y):
+		sfx.beep(120, 0.05, "square", 0.03); return
+	shake = 5.0
+	sfx.beep(180 + randf() * 40, 0.09, "sawtooth", 0.06)
+	var n := dir.normalized() if dir.length() > 0 else Vector2.DOWN
+	for i in 16:
+		var a := n.angle() + (randf() - 0.5) * 0.7
+		var s := 3.0 + randf() * 5.0
+		parts.append({"x": sim.px + n.x * 11, "y": sim.py + n.y * 11, "vx": cos(a) * s, "vy": sin(a) * s, "life": 1.0, "c": C_SHOT})
 
 
 # ---------------------------------------------------------------- simulation step (60 Hz)
@@ -479,13 +406,10 @@ func _physics_process(_delta: float) -> void:
 		death_face.life -= 1.0 / 40.0   # ~0.7 s; respawn stays instant, the face is just a ghost
 		death_face.y -= 0.6 * death_face.g
 		if death_face.life <= 0: death_face = {}
-	if notice.life > 0: notice.life -= 1
 	if view != "play":
 		return
-	if not replay.is_empty() and not sim.done:
-		_replay_step()
 	var res := sim.tick()
-	if sim.started and not sim.done and not sim.dead and replay.is_empty():
+	if sim.started and not sim.done and not sim.dead:
 		rec.append(sim.px + GHOST_ROOM * sim.room); rec.append(sim.py)
 		if ghost != null: gi = mini(gi + 2, ghost.size() - 2)
 	for ev in sim.events:
@@ -512,15 +436,6 @@ func _physics_process(_delta: float) -> void:
 	sim.events.clear()
 	if god.flash > 0: god.flash -= 1
 
-	if not replay.is_empty() and res != "":
-		if res == "win":
-			replay.done = true
-			sfx.beep(660, 0.1, "sine", 0.08)
-			get_tree().create_timer(0.1).timeout.connect(func(): sfx.beep(990, 0.18, "sine", 0.08))
-		else:   # can't happen unless the level changed after par was computed
-			show_notice("The par replay no longer matches this level")
-			stop_replay()
-		return   # replays never count as your run
 	if res == "dead":
 		deaths += 1; sfx.beep(90, 0.25, "sawtooth", 0.07); shake = 10.0
 		death_face = {"x": sim.px, "y": sim.py, "g": sim.g, "life": 1.0}
@@ -771,7 +686,7 @@ func _draw_world() -> void:
 	_draw_ships(now)
 
 	# ghost of your best run
-	if ghost != null and sim.started and gi < ghost.size() and replay.is_empty():
+	if ghost != null and sim.started and gi < ghost.size():
 		var groom := floori(float(ghost[gi]) / GHOST_ROOM)
 		if groom == sim.room:
 			draw_circle(Vector2(float(ghost[gi]) - GHOST_ROOM * groom, ghost[gi + 1]), 11, Color(Color("#9fb4ff"), 0.35))
@@ -974,26 +889,18 @@ func _draw_hud() -> void:
 			text("GRAVITY ↑", W / 2, 39, 14, C_BLUE, "c", true)
 	if god.flash > 0 and one_life():
 		text("ONE LIFE — back to level 1", W / 2, 150, 26, Color(C_SPIKE, minf(1.0, god.flash / 40.0)), "c", true)
-	if not replay.is_empty() and not sim.done:
-		var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 160.0)
-		text("▶ PAR REPLAY  ·  the bot is playing  ·  par %s" % str(par(li)), W / 2, 84, 15, Color(Color("#ff3df2"), pulse), "c", true)
-		text("P or R: stop and play it yourself  ·  Esc: menu", W / 2, 104, 12, C_DIM)
-	if notice.life > 0:
-		text(notice.text, W / 2, 132, 15, Color(C_ORB, minf(1.0, notice.life / 30.0)), "c", true)
-	if not sim.started and view == "play" and replay.is_empty():
+	if not sim.started and view == "play":
 		var tip: String = sim.rooms[0].tip
 		if li == 0 and using_pad:
 			tip = "Point the stick where you want to fly, then press A. You launch that way."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  R restart  ·  N / B next / back  ·  L levels  ·  P watch par  ·  Esc menu"
+			"click / tap / space = fire  ·  R restart  ·  N / B next / back  ·  L levels  ·  Esc menu"
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
 ## In-game cursor: a neon arrow pointing straight away from the ball (the way you'll fly).
 func _draw_cursor() -> void:
-	if not replay.is_empty() and replay.k >= (replay.path as Array).size():
-		return  # the bot has fired its last shot
 	var p := Vector2(sim.px, sim.py)
 	var d := aim - p
 	var dir := d.normalized() if d.length() > 0.5 else Vector2.UP
@@ -1027,12 +934,6 @@ func _draw_done() -> void:
 		return
 	var pr = par(li)
 	var sh := sim.shots
-	if not replay.is_empty():
-		text("PAR REPLAY", W / 2, 190, 16, Color("#ff3df2"), "c", true)
-		text("%d shot%s  ·  %s" % [sh, "" if sh == 1 else "s", fmt(sim.t)], W / 2, 240, 40, C_TEXT, "c", true)
-		text("That's the bot's best. Can you match it, or beat it?", W / 2, 284, 15, C_SUB)
-		button("Try it (R)", BTN_RETRY); button("Watch again (P)", BTN_LEVELS); button("Next (N)", BTN_NEXT)
-		return
 	text(fmt(sim.t), W / 2 - 110, 235, 44, C_GOAL if new_best else C_TEXT, "c", true)
 	text("%d shot%s" % [sh, "" if sh == 1 else "s"], W / 2 + 110, 235, 44, C_GOAL if new_fewest else C_SHOT, "c", true)
 	text("NEW BEST TIME" if new_best else "best %s" % fmt(best[key(li)]), W / 2 - 110, 262, 13, C_SUB, "c", true)
@@ -1040,8 +941,6 @@ func _draw_done() -> void:
 	if pr != null and sh <= pr:
 		text("★ " + ("UNDER PAR — you beat the bot" if sh < pr else "PAR"), W / 2, 300, 16, C_ORB, "c", true)
 	button("Retry (R)", BTN_RETRY); button("Levels (L)", BTN_LEVELS); button("Next (N)", BTN_NEXT)
-	if par_path(li) != null:
-		button("Watch par (P)", BTN_PAR)
 
 
 func _draw_menu() -> void:
