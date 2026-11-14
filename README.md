@@ -19,7 +19,7 @@ The game opens on a neon "Do You Got Skill" sign over a starry sky. Press any ke
 left, the menu slides in, and the neon ball pops in and hops between items as you choose.
 
 Menu: **Play** (continues your last level) · **Select Level** · **Difficulty** · **Leaderboard**
-(placeholder until Steam) · **Music** · **Neon** · **Aim** · **Credits** · **Quit** (desktop only).
+(placeholder until Steam) · **Music** · **Neon** · **Credits** · **Quit** (desktop only).
 Keyboard ↑↓ choose, ←→ change, Enter select, Esc back to the game · mouse hover/click ·
 controller D-pad, A, B. During play, **Esc** opens this menu and **L** opens the level grid.
 
@@ -30,13 +30,12 @@ Code: `scripts/title.gd`. Images of the sign for store pages / social posts are 
 
 | | Mouse / keyboard | Controller |
 |---|---|---|
-| Aim | Mouse (default: point where you want to **go**) | Either stick |
+| Aim | Mouse: point where you want to **go** (the neon arrow) | Either stick |
 | Fire | Click, tap or Space | A, RT or RB |
 | Restart | R | Y |
 | Next / previous level | N / B | — |
 | Level select | L, or the "☰ Levels" button | Start |
 | Main menu | Esc | B (from the level grid) |
-| Switch aim style | M (or the button on the level screen) | — |
 | Neon wall colour: by difficulty / by world | T (or the button on the level screen) | — |
 | Music volume | Main menu → Music: ←/→ = 1%, Shift = 10%, or click/drag the bar | D-pad 1%, LB/RB 10% |
 | Mute / unmute music | V (or the Music button on the level grid) | — |

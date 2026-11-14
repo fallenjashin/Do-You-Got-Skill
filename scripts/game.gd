@@ -47,7 +47,6 @@ var sim: Sim
 var li := 0
 var view := "play"            # "play" | "menu" | "credits"
 var diff := "medium"
-var aim_mode := "go"          # "go" = point where you want to fly, "fire" = point where the blast goes
 var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
 var aim := Vector2(W / 2, H / 2)
 var deaths := 0
@@ -112,7 +111,6 @@ func _load_save() -> void:
 	if parsed is Dictionary:
 		best = parsed.get("best", {})
 		if parsed.get("diff", "") in DIFFS: diff = parsed.diff
-		if parsed.get("aim", "") in ["go", "fire"]: aim_mode = parsed.aim
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
@@ -122,7 +120,7 @@ func _load_save() -> void:
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -229,11 +227,6 @@ func level_code(i: int) -> String:
 	return "%d-%d" % [i / 5 + 1, i % 5 + 1] if i < 50 else "F%d" % (i - 49)
 
 
-func toggle_aim() -> void:
-	aim_mode = "fire" if aim_mode == "go" else "go"
-	_save()
-
-
 func god_next() -> void:
 	if li == level_total() - 1: god.finished = true
 	else: load_level(li + 1)
@@ -242,7 +235,7 @@ func god_next() -> void:
 ## Direction the blast fires (you get pushed the opposite way).
 func fire_dir() -> Vector2:
 	var p := Vector2(sim.px, sim.py)
-	return (p - aim) if aim_mode == "go" else (aim - p)
+	return p - aim   # you point where you want to go; the blast fires the opposite way
 
 
 func burst(x: float, y: float, c: Color, n: int, sp := 6.0) -> void:
@@ -258,7 +251,6 @@ const BTN_RETRY := Rect2(W / 2 - 215, 330, 130, 44)
 const BTN_LEVELS := Rect2(W / 2 - 65, 330, 130, 44)
 const BTN_NEXT := Rect2(W / 2 + 85, 330, 130, 44)
 const HUD_LEVELS := Rect2(20, 18, 92, 30)
-const AIM_BOX := Rect2(770, 26, 170, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 const MUSIC_BOX := Rect2(228, 26, 130, 30)
 const CREDITS_BOX := Rect2(846, 508, 94, 24)
@@ -293,7 +285,6 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_ESCAPE:
 				if view == "credits": view = credits_back
 				else: open_main_menu()
-			KEY_M: toggle_aim()
 			KEY_T: toggle_neon()
 			KEY_V: toggle_mute()
 			KEY_C:
@@ -350,7 +341,6 @@ func press() -> void:
 		view = credits_back; return
 	if view == "menu":
 		if hit(CREDITS_BOX): credits_back = "menu"; view = "credits"; return
-		if hit(AIM_BOX): toggle_aim(); return
 		if hit(NEON_BOX): toggle_neon(); return
 		if hit(MUSIC_BOX): toggle_mute(); return
 		for i in DIFFS.size():
@@ -689,10 +679,9 @@ func _draw_world() -> void:
 		var dir := (aim - p).normalized() if (aim - p).length() > 0 else Vector2.UP
 		var col := Color(C_SHOT, 0.6) if sim.ammo > 0 else Color(1, 1, 1, 0.15)
 		draw_dashed_line(p + dir * 16, p + dir * 60, col, 1.0, 5.0)
-		if aim_mode == "go":
-			var e := p + dir * 66
-			var nrm := Vector2(-dir.y, dir.x)
-			draw_colored_polygon(PackedVector2Array([e + dir * 8, e + nrm * 5, e - nrm * 5]), Color(col, 0.8 if sim.ammo > 0 else 0.15))
+		var e := p + dir * 66
+		var nrm := Vector2(-dir.y, dir.x)
+		draw_colored_polygon(PackedVector2Array([e + dir * 8, e + nrm * 5, e - nrm * 5]), Color(col, 0.8 if sim.ammo > 0 else 0.15))
 
 	# player
 	if sim.phased:
@@ -817,52 +806,30 @@ func _draw_hud() -> void:
 	if not sim.started and view == "play":
 		var tip: String = sim.L.tip
 		if li == 0:
-			tip = "Click where you want to fly. The blast fires the opposite way." if aim_mode == "go" else "Click BELOW you to launch up. You fly away from where you fire."
+			tip = "Click where you want to fly. The blast fires the opposite way."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  aim: %s (M)  ·  R restart  ·  N / B  ·  L levels  ·  Esc menu" % ("where you go" if aim_mode == "go" else "where you fire")
+			"click / tap / space = fire  ·  R restart  ·  N / B next / back  ·  L levels  ·  Esc menu"
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
-## In-game cursor. "Aim where you go": a neon arrow pointing straight away from the ball
-## (the way you'll fly). "Aim where you fire": a neon bomb with a sparking fuse where the blast goes.
+## In-game cursor: a neon arrow pointing straight away from the ball (the way you'll fly).
 func _draw_cursor() -> void:
 	var p := Vector2(sim.px, sim.py)
 	var d := aim - p
 	var dir := d.normalized() if d.length() > 0.5 else Vector2.UP
 	var perp := Vector2(-dir.y, dir.x)
 	var a := 1.0 if sim.ammo > 0 else 0.35
-	var t := Time.get_ticks_msec() / 1000.0
-	if aim_mode == "go":
-		var c := neon()
-		var tip := aim
-		var shape := PackedVector2Array([tip, tip - dir * 14 + perp * 10, tip - dir * 10 + perp * 3.5, tip - dir * 26 + perp * 3.5,
-			tip - dir * 26 - perp * 3.5, tip - dir * 10 - perp * 3.5, tip - dir * 14 - perp * 10])
-		var loop := shape.duplicate()
-		loop.append(shape[0])
-		for layer in [[9.0, 0.08], [5.0, 0.2]]:
-			draw_polyline(loop, Color(c, layer[1] * a), layer[0], true)
-		draw_colored_polygon(shape, Color(c.lightened(0.55), 0.92 * a))
-		draw_polyline(loop, Color(c, a), 1.5, true)
-	else:
-		var c := Color("#ff3df2")
-		var center := aim
-		for layer in [[21.0, 0.06], [16.0, 0.12]]:
-			draw_circle(center, layer[0], Color(c, layer[1] * a))
-		draw_circle(center, 12.0, Color(Color("#1a1d2e"), a))
-		draw_arc(center, 12.0, 0, TAU, 32, Color(c, a), 2.0, true)
-		draw_circle(center + Vector2(-4, -4), 2.8, Color(1, 1, 1, 0.45 * a))   # shine
-		# fuse leans away from the ball, spark at the tip
-		var base := center + dir * 12.0
-		var tipf := base + dir * 9.0 + perp * 3.5 * sin(t * 6.0)
-		draw_rect(Rect2(base - Vector2(3.5, 3.5), Vector2(7, 7)), Color(Color("#2a2f44"), a))
-		draw_line(base, tipf, Color(Color("#c9b38a"), a), 2.0, true)
-		var spark := 4.0 + 2.0 * sin(t * 30.0)
-		for k in 4:
-			var ang := t * 9.0 + k * PI / 4.0
-			draw_line(tipf - Vector2(cos(ang), sin(ang)) * spark, tipf + Vector2(cos(ang), sin(ang)) * spark, Color(Color("#ffd166"), a), 1.4)
-		draw_circle(tipf, 1.8, Color(1, 0.95, 0.7, a))
-		draw_circle(center, 1.2, Color(c.lightened(0.5), a))   # exact aim point
+	var c := neon()
+	var tip := aim
+	var shape := PackedVector2Array([tip, tip - dir * 14 + perp * 10, tip - dir * 10 + perp * 3.5, tip - dir * 26 + perp * 3.5,
+		tip - dir * 26 - perp * 3.5, tip - dir * 10 - perp * 3.5, tip - dir * 14 - perp * 10])
+	var loop := shape.duplicate()
+	loop.append(shape[0])
+	for layer in [[9.0, 0.08], [5.0, 0.2]]:
+		draw_polyline(loop, Color(c, layer[1] * a), layer[0], true)
+	draw_colored_polygon(shape, Color(c.lightened(0.55), 0.92 * a))
+	draw_polyline(loop, Color(c, a), 1.5, true)
 
 
 func _draw_done() -> void:
@@ -897,8 +864,6 @@ func _draw_menu() -> void:
 	text("Neon: by %s ⇄" % neon_mode, NEON_BOX.get_center().x, NEON_BOX.position.y + 20, 13, neon(), "c", true)
 	draw_rect(MUSIC_BOX, C_PANEL_HI if hit(MUSIC_BOX) else C_PANEL)
 	text("Music: %s" % ("muted" if music_volume <= 0.0 else "%d%%" % roundi(music_volume * 100)), MUSIC_BOX.get_center().x, MUSIC_BOX.position.y + 20, 13, C_TEXT, "c", true)
-	draw_rect(AIM_BOX, C_PANEL_HI if hit(AIM_BOX) else C_PANEL)
-	text("Aim: %s ⇄" % ("where you go" if aim_mode == "go" else "where you fire"), AIM_BOX.get_center().x, AIM_BOX.position.y + 20, 13, C_SHOT, "c", true)
 	for i in DIFFS.size():
 		var b := diff_box(i)
 		var on: bool = DIFFS[i] == diff

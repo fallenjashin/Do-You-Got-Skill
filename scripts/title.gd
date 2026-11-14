@@ -63,7 +63,6 @@ func items() -> Array:
 		{"id": "leaderboard", "label": "Leaderboard", "value": "soon", "c": C_VIOLET},
 		{"id": "music", "label": "Music", "value": "muted" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA, "slider": true},
 		{"id": "neon", "label": "Neon", "value": "by " + game.neon_mode, "opt": true, "c": C_MAGENTA},
-		{"id": "aim", "label": "Aim", "value": "where you go" if game.aim_mode == "go" else "where you fire", "opt": true, "c": C_MAGENTA},
 		{"id": "credits", "label": "Credits", "value": "", "c": C_VIOLET},
 	]
 	if not OS.has_feature("web"):
@@ -159,7 +158,6 @@ func change(i: int, dir: int) -> void:
 			game.view = "main"
 		"music": game.adjust_music(dir)
 		"neon": game.toggle_neon()
-		"aim": game.toggle_aim()
 		_: return
 	game.sfx.beep(520, 0.05, "triangle", 0.05)
 
@@ -308,7 +306,6 @@ func _draw() -> void:
 	if game.view == "title":
 		var a := 0.45 + 0.45 * sin(time * 3.0)
 		_text("press any key", W / 2, 452, 18, Color(C_TEXT, a), true)
-		_text("you can't walk. you only move by recoil.", W / 2, 488, 13, Color(C_SUB, 0.8))
 	elif game.view == "main":
 		_draw_menu(k)
 	elif game.view == "leaderboard":

@@ -42,7 +42,7 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
-	check(ids.slice(0, 8) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "aim", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, aim, credits")
+	check(ids.slice(0, 7) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, credits")
 	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
@@ -111,18 +111,14 @@ func _initialize() -> void:
 	check(game.view == "play", "Esc in the main menu goes back to the game")
 	check(game.music.current == game.music.track_for_level(game.li), "going back to the game brings the level's song back")
 
-	game.set_diff("medium"); game.aim_mode = "go"; game.load_level(0)
+	game.set_diff("medium"); game.load_level(0)
 
 	# aiming "where you go": click up-right of the ball -> it moves up and right
 	var start := Vector2(game.sim.px, game.sim.py)
 	game.aim = start + Vector2(100, -150); game.press(); ticks(15)
 	check(game.sim.shots == 1 and game.sim.py < start.y - 40 and game.sim.px > start.x, "aim-where-you-go launches up and right")
 
-	# old style: aim far below the ball (even outside the play area) -> launches up
-	game.aim_mode = "fire"; game.load_level(0)
-	game.aim = Vector2(game.sim.px, 900); game.press(); ticks(12)
-	check(game.sim.py < start.y - 40, "aim-where-you-fire works with the cursor below the play area")
-	game.aim_mode = "go"
+	check(not "aim" in game.title.items().map(func(it): return it.id) and not "aim_mode" in game, "the 'aim where you fire' option is gone")
 
 	# winning records time + shots
 	game.load_level(0); game.aim = Vector2(game.sim.px, 0); game.press()
