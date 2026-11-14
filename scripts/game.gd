@@ -387,6 +387,23 @@ func neon_outline(r: Rect2, c: Color, a := 1.0) -> void:
 	draw_rect(r, Color(c.lightened(0.55), 0.95 * a), false, 1.5)
 
 
+## Tall spike strip: a thin core with teeth out to its edges, so what you see is exactly what kills.
+func spike_column(r: Rect2) -> void:
+	var inset := minf(5.0, r.size.x / 3.0)
+	draw_rect(Rect2(r.position.x + inset, r.position.y, r.size.x - 2 * inset, r.size.y), C_SPIKE)
+	var j := 0.0
+	while j + 10.0 <= r.size.y + 0.01:
+		var y := r.position.y + j
+		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x + inset, y), Vector2(r.position.x, y + 5), Vector2(r.position.x + inset, y + 10)]), C_SPIKE)
+		draw_colored_polygon(PackedVector2Array([Vector2(r.end.x - inset, y), Vector2(r.end.x, y + 5), Vector2(r.end.x - inset, y + 10)]), C_SPIKE)
+		j += 10.0
+	# a point on the free end (bottom if it hangs from the ceiling, top otherwise)
+	if r.position.y < 60:
+		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, r.end.y - 6), Vector2(r.get_center().x, r.end.y), Vector2(r.end.x, r.end.y - 6)]), C_SPIKE)
+	else:
+		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, r.position.y + 6), Vector2(r.get_center().x, r.position.y), Vector2(r.end.x, r.position.y + 6)]), C_SPIKE)
+
+
 func dashed_circle(pos: Vector2, r: float, c: Color) -> void:
 	var n := 48
 	for i in n:
@@ -456,7 +473,6 @@ func _draw_world() -> void:
 	for k in L.get("k", []):
 		if k.size() >= 7:
 			var r := rect_of(Sim.spike_at(k, sim.t * float(sim.d.spike)))
-			glow(r.get_center(), maxf(r.size.x, r.size.y) * 0.4, C_SPIKE, 0.6)
 			draw_rect(r, C_SPIKE)
 			var tooth := 6.0
 			var i := 0.0
@@ -473,7 +489,6 @@ func _draw_world() -> void:
 				j += 10
 		else:
 			var r := rect_of(k)
-			draw_rect(r.grow(3), Color(C_SPIKE, 0.10))
 			var up := r.position.y >= 60
 			if r.size.x >= r.size.y:
 				var n := maxi(1, roundi(r.size.x / 16.0))
@@ -485,7 +500,7 @@ func _draw_world() -> void:
 					else:
 						draw_colored_polygon(PackedVector2Array([Vector2(bx, r.position.y), Vector2(bx + sw / 2, r.end.y), Vector2(bx + sw, r.position.y)]), C_SPIKE)
 			else:
-				draw_rect(r, C_SPIKE)
+				spike_column(r)
 
 	_draw_moving_solids()
 	_draw_lasers(now)
