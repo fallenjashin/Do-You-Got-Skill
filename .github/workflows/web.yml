@@ -59,7 +59,10 @@ jobs:
           PCK="game-${GITHUB_SHA::8}.pck"
           mv index.pck "$PCK"
           sed -i "s/index\.pck/$PCK/g" index.html
-          grep -q "$PCK" index.html
+          # The loader uses config.mainPack, or "<executable>.pck" if it's missing, so set it.
+          sed -i "s/\"executable\":\"index\"/\"executable\":\"index\",\"mainPack\":\"$PCK\"/" index.html
+          grep -o 'GODOT_CONFIG = {[^;]*' index.html
+          grep -q "\"mainPack\":\"$PCK\"" index.html
           ! grep -q 'index\.pck' index.html
 
       - uses: actions/upload-pages-artifact@v3
