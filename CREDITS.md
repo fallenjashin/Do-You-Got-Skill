@@ -39,7 +39,8 @@ Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur. https://godotengine.org/li
 Before a commercial release, also include Godot's full license text and its third-party notices
 (Godot docs: "Complying with licenses").
 
-## Font
+## Fonts
 
-Menu symbols use a small subset of **DejaVu Sans** (`assets/fonts/`); license in
-`assets/fonts/DEJAVU_LICENSE.txt`.
+- **Inter** (all text and the neon logo), Copyright (c) 2016 The Inter Project Authors,
+  SIL Open Font License 1.1 (`assets/fonts/INTER_LICENSE.txt`). Bundled as Latin-only subsets.
+- **DejaVu Sans** (menu symbols), small subset; license in `assets/fonts/DEJAVU_LICENSE.txt`.

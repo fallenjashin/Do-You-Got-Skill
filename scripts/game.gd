@@ -6,6 +6,8 @@ extends Node2D
 const Sim := preload("res://scripts/sim.gd")
 const SfxScript := preload("res://scripts/sfx.gd")
 const MusicScript := preload("res://scripts/music.gd")
+const TitleScript := preload("res://scripts/title.gd")
+const TITLE_VIEWS := ["title", "main", "leaderboard"]
 const MUSIC_STEPS := [1.0, 0.7, 0.4, 0.0]
 const W := 960.0
 const H := 540.0
@@ -65,30 +67,38 @@ var using_pad := false
 var trigger_was_down := false
 var ui_alpha := 1.0          # HUD fades when the goal or the ball is underneath it
 
-var font: SystemFont
-var font_bold: SystemFont
+var font: Font
+var font_bold: Font
+var font_sign: Font   # the neon logo
 var music: Node  # scripts/music.gd
+var title: Node2D  # scripts/title.gd (start screen + main menu)
+var last_level := 0          # what "Play" continues from
+var credits_back := "menu"   # where closing the credits returns to
 var music_volume := 0.7
 var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
 
 func _ready() -> void:
 	data = Sim.load_data()
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Inter", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"])
-	font_bold = font.duplicate()
-	font_bold.font_weight = 750
-	# symbols (☰ ⇄ ★ ✓ …) come from a tiny bundled DejaVu subset, so they show
-	# everywhere, including the web build where system fonts aren't available
+	# Bundled Inter (SIL OFL) so text looks identical on every PC and in the browser;
+	# symbols (☰ ⇄ ★ ✓ ← → …) come from a tiny DejaVu subset as a fallback.
+	font = load("res://assets/fonts/inter-regular.otf")
+	font_bold = load("res://assets/fonts/inter-bold.otf")
+	font_sign = load("res://assets/fonts/inter-display-extrabold.otf")
 	font.fallbacks = [load("res://assets/fonts/symbols.ttf")]
 	font_bold.fallbacks = [load("res://assets/fonts/symbols-bold.ttf")]
+	font_sign.fallbacks = [load("res://assets/fonts/symbols-bold.ttf")]
 	sfx = SfxScript.new()
 	add_child(sfx)
 	music = MusicScript.new()
 	add_child(music)
 	_load_save()
 	music.set_volume(music_volume)
-	load_level(0)
+	title = TitleScript.new()
+	title.game = self
+	add_child(title)
+	load_level(last_level)
+	view = "title"
 
 
 # ---------------------------------------------------------------- save / load
@@ -103,12 +113,13 @@ func _load_save() -> void:
 		if parsed.get("aim", "") in ["go", "fire"]: aim_mode = parsed.aim
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
+		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, data.levels.size() - 1)
 
 
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume, "last": last_level}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -134,9 +145,23 @@ func load_level(i: int) -> void:
 	new_best = false
 	new_fewest = false
 	music.play_for_level(li, one_life())
+	if not one_life() and li != last_level:
+		last_level = li
+		_save()
 
 
 ## Music volume steps: 100% → 70% → 40% → off → 100%
+func step_music(dir: int) -> void:
+	var i := MUSIC_STEPS.find(music_volume)
+	music_volume = MUSIC_STEPS[posmod((i if i >= 0 else 0) + dir, MUSIC_STEPS.size())]
+	music.set_volume(music_volume)
+	_save()
+
+
+func open_main_menu() -> void:
+	title.open_main(true)
+
+
 func cycle_music() -> void:
 	var i := MUSIC_STEPS.find(music_volume)
 	music_volume = MUSIC_STEPS[(i + 1) % MUSIC_STEPS.size()] if i >= 0 else MUSIC_STEPS[0]
@@ -216,6 +241,8 @@ func hit(r: Rect2) -> bool: return r.has_point(aim)
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(e: InputEvent) -> void:
+	if view in TITLE_VIEWS:
+		return  # handled by title.gd
 	if e is InputEventMouseMotion:
 		aim = e.position; using_pad = false
 	elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
@@ -230,11 +257,18 @@ func _unhandled_input(e: InputEvent) -> void:
 				if not one_life(): load_level(li + 1)
 				elif sim.done: god_next()
 			KEY_B: if not one_life(): load_level(li - 1)
-			KEY_L, KEY_ESCAPE: view = "play" if view == "menu" else "menu"
+			KEY_L: view = "play" if view == "menu" else "menu"
+			KEY_ESCAPE:
+				if view == "credits": view = credits_back
+				else: open_main_menu()
 			KEY_M: toggle_aim()
 			KEY_T: toggle_neon()
 			KEY_V: cycle_music()
-			KEY_C: view = "menu" if view == "credits" else "credits"
+			KEY_C:
+				if view == "credits": view = credits_back
+				else:
+					credits_back = view
+					view = "credits"
 	elif e is InputEventJoypadButton and e.pressed:
 		using_pad = true
 		_pad_button(e.button_index)
@@ -250,7 +284,8 @@ func _pad_button(b: int) -> void:
 			JOY_BUTTON_LEFT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) - 1, DIFFS.size())])
 			JOY_BUTTON_RIGHT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) + 1, DIFFS.size())])
 			JOY_BUTTON_A: start_god() if one_life() else load_level(menu_sel)
-			JOY_BUTTON_START, JOY_BUTTON_B: view = "play"
+			JOY_BUTTON_START: view = "play"
+			JOY_BUTTON_B: open_main_menu()
 		return
 	match b:
 		JOY_BUTTON_A, JOY_BUTTON_RIGHT_SHOULDER:
@@ -280,9 +315,9 @@ func _pad_aim() -> void:
 
 func press() -> void:
 	if view == "credits":
-		view = "menu"; return
+		view = credits_back; return
 	if view == "menu":
-		if hit(CREDITS_BOX): view = "credits"; return
+		if hit(CREDITS_BOX): credits_back = "menu"; view = "credits"; return
 		if hit(AIM_BOX): toggle_aim(); return
 		if hit(NEON_BOX): toggle_neon(); return
 		if hit(MUSIC_BOX): cycle_music(); return
@@ -455,6 +490,8 @@ func button(label: String, r: Rect2) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
+	if view in TITLE_VIEWS:
+		return  # title.gd draws the whole screen
 	draw_rect(Rect2(0, 0, W, H), C_BG)
 	if shake > 0.3:
 		draw_set_transform(Vector2((randf() - 0.5) * shake, (randf() - 0.5) * shake))
@@ -746,7 +783,7 @@ func _draw_hud() -> void:
 			tip = "Click where you want to fly. The blast fires the opposite way." if aim_mode == "go" else "Click BELOW you to launch up. You fly away from where you fire."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  aim: %s (M)  ·  T neon  ·  V music  ·  R restart  ·  N / B  ·  L levels" % ("where you go" if aim_mode == "go" else "where you fire")
+			"click / tap / space = fire  ·  aim: %s (M)  ·  R restart  ·  N / B  ·  L levels  ·  Esc menu" % ("where you go" if aim_mode == "go" else "where you fire")
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
@@ -846,5 +883,5 @@ func _draw_credits() -> void:
 	text("Made with Godot Engine  ·  godotengine.org/license", W / 2, 392, 13, C_TEXT, "c")
 	text("© 2014-present Godot Engine contributors; © 2007-2014 Juan Linietsky, Ariel Manzur. MIT license.", W / 2, 410, 11, C_SUB)
 	text("FONT", W / 2, 442, 13, C_ORB, "c", true)
-	text("Menu symbols: DejaVu Sans (Bitstream Vera Fonts license)", W / 2, 462, 12, C_SUB)
+	text("Inter by The Inter Project Authors (SIL Open Font License 1.1)  ·  symbols: DejaVu Sans (Bitstream Vera license)", W / 2, 462, 12, C_SUB)
 	text("click or press C to close", W / 2, 512, 12, C_DIM)

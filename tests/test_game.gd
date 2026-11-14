@@ -18,6 +18,13 @@ func ticks(n: int) -> void:
 func center(r: Rect2) -> Vector2: return r.get_center()
 
 
+func _key(k: Key) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.keycode = k
+	e.pressed = true
+	return e
+
+
 func _initialize() -> void:
 	game = load("res://scenes/main.tscn").instantiate()
 	game.save_path = "user://test_save.json"   # never touch the player's real progress
@@ -25,6 +32,46 @@ func _initialize() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_path))
 	root.add_child(game)
 	await process_frame
+
+	# ---- start screen and main menu
+	var t: Node2D = game.title
+	check(game.view == "title", "the game opens on the start screen")
+	t._unhandled_input(_key(KEY_X))
+	check(game.view == "main", "any key opens the main menu")
+	t._process(1.5)
+	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
+	var ids: Array = t.items().map(func(it): return it.id)
+	check(ids.slice(0, 8) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "aim", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, aim, credits")
+	t._unhandled_input(_key(KEY_DOWN))
+	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
+	t._process(0.5)
+	t._unhandled_input(_key(KEY_ENTER))
+	check(game.view == "menu", "Select Level opens the level grid")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "main", "Esc on the level grid goes back to the main menu")
+	t.sel = ids.find("leaderboard"); t._unhandled_input(_key(KEY_ENTER))
+	check(game.view == "leaderboard", "Leaderboard opens its placeholder screen")
+	t._unhandled_input(_key(KEY_RIGHT))
+	check(t.lb_level == posmod(game.last_level + 1, 60), "left/right browse levels on the leaderboard")
+	t._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "main", "Esc leaves the leaderboard")
+	t.sel = ids.find("credits"); t._unhandled_input(_key(KEY_ENTER))
+	check(game.view == "credits", "Credits opens from the main menu")
+	game.press()
+	check(game.view == "main", "closing credits returns to the main menu")
+	var mv: float = game.music_volume
+	t.sel = ids.find("music"); t._unhandled_input(_key(KEY_LEFT))
+	check(game.music_volume != mv, "left/right change the music volume")
+	t.sel = ids.find("difficulty"); t._unhandled_input(_key(KEY_RIGHT))
+	check(game.diff != "medium" and game.view == "main", "left/right change the difficulty")
+	game.set_diff("medium")
+	t.sel = 0; t._unhandled_input(_key(KEY_ENTER))
+	check(game.view == "play" and game.li == game.last_level, "Play continues from the last level")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "main", "Esc during play opens the main menu")
+	t._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "play", "Esc in the main menu goes back to the game")
+
 	game.set_diff("medium"); game.aim_mode = "go"; game.load_level(0)
 
 	# aiming "where you go": click up-right of the ball -> it moves up and right
@@ -146,6 +193,9 @@ func _initialize() -> void:
 	check(game.neon_mode == "difficulty", "level-screen button switches it back")
 	var saved = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
 	check(saved.get("neon", "") == "difficulty", "neon choice is saved")
+	game.load_level(17)
+	var sv2 = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
+	check(int(sv2.get("last", -1)) == 17, "the last level played is saved for Play/continue")
 	check(FileAccess.file_exists("user://test_save.json"), "progress saved to disk")
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()
