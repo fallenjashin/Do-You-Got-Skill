@@ -688,8 +688,25 @@ func _draw_world() -> void:
 		glow(p, 11, C_PURPLE); draw_circle(p, 11, Color(Color("#c9b3ff"), 0.55))
 	else:
 		glow(p, 11, Color("#7aa2ff")); draw_circle(p, 11, C_TEXT)
+	_draw_eyes(p, now)
 	for i in sim.ammo_max:
 		draw_circle(Vector2(p.x - (sim.ammo_max - 1) * 5 + i * 10, p.y - 22), 3.5, C_SHOT if i < sim.ammo else Color(1, 1, 1, 0.15))
+
+
+## Same face as the menu's neon ball: eyes look where you're aiming (where you want to go) and
+## blink now and then. With gravity flipped the face sits on the other side, so it reads as upside down.
+func _draw_eyes(p: Vector2, now: float) -> void:
+	var look := aim - p
+	look = look.normalized() if look.length() > 1 else Vector2(1, 0)
+	var up := -1.7 * sim.g
+	var ink := Color("#1a1f33")
+	var blink := fposmod(now, 3.7) < 0.12
+	for side in [-1.0, 1.0]:
+		var e := p + Vector2(side * 3.6, up) + look * 1.9
+		if blink:
+			draw_line(e - Vector2(1.9, 0), e + Vector2(1.9, 0), ink, 1.4)
+		else:
+			draw_circle(e, 1.8, ink)
 
 
 func _tau() -> float:
