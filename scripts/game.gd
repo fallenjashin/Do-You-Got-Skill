@@ -168,6 +168,12 @@ func start_from_menu(i: int) -> void:
 	else: load_level(i)
 
 
+## Back to the level from the main menu (the level's song comes back in).
+func resume_play() -> void:
+	view = "play"
+	music.play_for_level(li, one_life())
+
+
 func open_main_menu() -> void:
 	title.open_main(true)
 
@@ -888,9 +894,10 @@ func _draw_credits() -> void:
 		"10 Space Echoes", "11 I.A.'s Growl", "12 Faceless Crowd", "13 Between Everyone and Anyone", "14 There's Someone Here"]
 	for i in titles.size():
 		text(titles[i], 200 + (i / 7) * 330, 210 + (i % 7) * 20, 12, C_DIM, "l")
-	text("ENGINE", W / 2, 370, 13, C_ORB, "c", true)
-	text("Made with Godot Engine  ·  godotengine.org/license", W / 2, 392, 13, C_TEXT, "c")
-	text("© 2014-present Godot Engine contributors; © 2007-2014 Juan Linietsky, Ariel Manzur. MIT license.", W / 2, 410, 11, C_SUB)
+	text("Title theme: \"Pink Bloom\" (itch.io, licensed for commercial use)", W / 2, 352, 12, C_SUB)
+	text("ENGINE", W / 2, 378, 13, C_ORB, "c", true)
+	text("Made with Godot Engine  ·  godotengine.org/license", W / 2, 398, 13, C_TEXT, "c")
+	text("© 2014-present Godot Engine contributors; © 2007-2014 Juan Linietsky, Ariel Manzur. MIT license.", W / 2, 415, 11, C_SUB)
 	text("FONT", W / 2, 442, 13, C_ORB, "c", true)
 	text("Inter by The Inter Project Authors (SIL Open Font License 1.1)  ·  symbols: DejaVu Sans (Bitstream Vera license)", W / 2, 462, 12, C_SUB)
 	text("click or press C to close", W / 2, 512, 12, C_DIM)

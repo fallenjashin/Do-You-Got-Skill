@@ -21,6 +21,7 @@ const FINALS_EARLY := "07_binary_chaos"                # F1-F5
 const FINALS_LATE := "11_i_a_s_growl"                  # F6-F9
 const FINAL_EXAM := "13_between_everyone_and_anyone"   # F10
 const GOD_MODE := "14_theres_someone_here"             # whole God Mode run
+const TITLE := "00_title_pink_bloom"                   # start screen, main menu, leaderboard (itch.io; see CREDITS.md)
 
 # Measured integrated loudness (LUFS) -> gain that brings each track to about -14.5 LUFS.
 const GAIN_DB := {
@@ -28,7 +29,7 @@ const GAIN_DB := {
 	"04_secret_dissonance": -0.3, "05_into_the_code_abyss": -2.4, "06_electric_inferno": -2.8,
 	"07_binary_chaos": -2.8, "08_sentinel_cloud": -0.9, "09_ghost_steps": -1.1,
 	"10_space_echoes": -0.6, "11_i_a_s_growl": -2.0, "12_faceless_crowd": -1.3,
-	"13_between_everyone_and_anyone": -3.0, "14_theres_someone_here": 0.2,
+	"13_between_everyone_and_anyone": -3.0, "14_theres_someone_here": 0.2, "00_title_pink_bloom": -3.1,
 }
 const FADE := 1.2  # seconds
 

@@ -40,6 +40,7 @@ func _initialize() -> void:
 	check(game.view == "main", "any key opens the main menu")
 	t._process(1.5)
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
+	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
 	check(ids.slice(0, 8) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "aim", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, aim, credits")
 	var beeps_before: int = game.sfx._next
@@ -78,8 +79,11 @@ func _initialize() -> void:
 	check(game.music._active != player_before, "picking a level on the grid restarts the song")
 	game._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "main", "Esc during play opens the main menu")
+	t._process(0.1)
+	check(game.music.current == "00_title_pink_bloom", "opening the menu mid-game brings the title song back")
 	t._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "play", "Esc in the main menu goes back to the game")
+	check(game.music.current == game.music.track_for_level(game.li), "going back to the game brings the level's song back")
 
 	game.set_diff("medium"); game.aim_mode = "go"; game.load_level(0)
 

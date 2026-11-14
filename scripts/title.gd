@@ -176,7 +176,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_LEFT, KEY_A: change(sel, -1)
 			KEY_RIGHT, KEY_D: change(sel, 1)
 			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: activate(sel)
-			KEY_ESCAPE: game.view = "play"
+			KEY_ESCAPE: game.resume_play()
 	elif e is InputEventJoypadButton and e.pressed:
 		match e.button_index:
 			JOY_BUTTON_DPAD_UP: set_sel(sel - 1)
@@ -184,7 +184,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			JOY_BUTTON_DPAD_LEFT: change(sel, -1)
 			JOY_BUTTON_DPAD_RIGHT: change(sel, 1)
 			JOY_BUTTON_A: activate(sel)
-			JOY_BUTTON_B: game.view = "play"
+			JOY_BUTTON_B: game.resume_play()
 
 
 func _leaderboard_input(e: InputEvent) -> void:
@@ -211,6 +211,8 @@ func _process(delta: float) -> void:
 	visible = showing()
 	if not visible:
 		return
+	if game.music.current != game.music.TITLE:
+		game.music.play(game.music.TITLE)
 	time += delta
 	if game.view != "title" and trans < 1.0:
 		trans = minf(1.0, trans + delta / TRANSITION)

@@ -32,6 +32,15 @@ These are the attributions required to ship the game. They also appear in-game
 
 Put the same credit on the Steam / itch.io store page.
 
+## Title theme
+
+**"Pink Bloom"**, from itch.io, licensed for commercial use. Plays on the start screen, main menu and
+leaderboard (`assets/music/00_title_pink_bloom.ogg`; 0.04 s of leading silence trimmed, tiny loop
+fades, converted to .ogg; volume balanced in-game).
+- Artist: _fill in_
+- itch.io page: _fill in_
+- License: _fill in (keep a screenshot of the license page)_
+
 ## Engine: MIT license
 
 Made with **Godot Engine**. Copyright (c) 2014-present Godot Engine contributors;
