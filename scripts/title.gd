@@ -102,15 +102,13 @@ func set_sel(i: int) -> void:
 		var a := away.angle() + randf_range(-0.6, 0.6)
 		var s := randf_range(1.5, 4.0)
 		parts.append({"p": ball_from + away * 10, "v": Vector2(cos(a), sin(a)) * s, "life": 1.0, "c": C_SHOT})
-	game.sfx.beep(240, 0.05, "sawtooth", 0.03)
 
 
 func activate(i: int, dir := 1) -> void:
 	var it: Dictionary = items()[i]
 	match it.id:
 		"play":
-			if game.one_life(): game.start_god()
-			else: game.load_level(game.last_level)
+			game.start_from_menu(game.last_level)
 		"select":
 			game.menu_sel = game.li
 			game.view = "menu"

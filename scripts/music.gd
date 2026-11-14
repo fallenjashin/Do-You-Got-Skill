@@ -70,9 +70,10 @@ func _load(track: String) -> AudioStream:
 	return _cache[track]
 
 
-## Start a track (crossfading from whatever is playing). Same track = keep playing.
-func play(track: String) -> void:
-	if track == current:
+## Start a track, crossfading from whatever is playing. Same track keeps playing,
+## unless restart is true, then it crossfades into the same track from the beginning.
+func play(track: String, restart := false) -> void:
+	if track == current and not restart:
 		return
 	var stream := _load(track)
 	if stream == null:
@@ -92,8 +93,8 @@ func play(track: String) -> void:
 		tw.chain().tween_callback(old.stop)
 
 
-func play_for_level(i: int, god_mode := false) -> void:
-	play(track_for_level(i, god_mode))
+func play_for_level(i: int, god_mode := false, restart := false) -> void:
+	play(track_for_level(i, god_mode), restart)
 
 
 func set_volume(v: float) -> void:

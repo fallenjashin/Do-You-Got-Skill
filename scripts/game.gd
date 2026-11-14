@@ -74,6 +74,7 @@ var music: Node  # scripts/music.gd
 var title: Node2D  # scripts/title.gd (start screen + main menu)
 var last_level := 0          # what "Play" continues from
 var credits_back := "menu"   # where closing the credits returns to
+var restart_music := false   # set when a level is started from a menu
 var music_volume := 0.7
 var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
@@ -144,7 +145,8 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
-	music.play_for_level(li, one_life())
+	music.play_for_level(li, one_life(), restart_music)
+	restart_music = false
 	if not one_life() and li != last_level:
 		last_level = li
 		_save()
@@ -156,6 +158,14 @@ func step_music(dir: int) -> void:
 	music_volume = MUSIC_STEPS[posmod((i if i >= 0 else 0) + dir, MUSIC_STEPS.size())]
 	music.set_volume(music_volume)
 	_save()
+
+
+## Starting a level from a menu (Play, or a level on the grid) restarts its song from the top.
+## Retrying after a death or pressing Next does not.
+func start_from_menu(i: int) -> void:
+	restart_music = true
+	if one_life(): start_god()
+	else: load_level(i)
 
 
 func open_main_menu() -> void:
@@ -283,7 +293,7 @@ func _pad_button(b: int) -> void:
 			JOY_BUTTON_DPAD_DOWN: menu_sel = posmod(menu_sel + 10, level_total())
 			JOY_BUTTON_LEFT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) - 1, DIFFS.size())])
 			JOY_BUTTON_RIGHT_SHOULDER: set_diff(DIFFS[posmod(DIFFS.find(diff) + 1, DIFFS.size())])
-			JOY_BUTTON_A: start_god() if one_life() else load_level(menu_sel)
+			JOY_BUTTON_A: start_from_menu(menu_sel)
 			JOY_BUTTON_START: view = "play"
 			JOY_BUTTON_B: open_main_menu()
 		return
@@ -325,8 +335,7 @@ func press() -> void:
 			if hit(diff_box(i)): set_diff(DIFFS[i]); return
 		for i in level_total():
 			if hit(menu_box(i)):
-				if one_life(): start_god()
-				else: load_level(i)
+				start_from_menu(i)
 				return
 		if one_life(): start_god()
 		else: load_level(li)

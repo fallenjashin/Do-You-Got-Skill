@@ -42,8 +42,10 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	var ids: Array = t.items().map(func(it): return it.id)
 	check(ids.slice(0, 8) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "aim", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, aim, credits")
+	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
+	check(game.sfx._next == beeps_before, "moving through the menu makes no sound")
 	t._process(0.5)
 	t._unhandled_input(_key(KEY_ENTER))
 	check(game.view == "menu", "Select Level opens the level grid")
@@ -65,8 +67,15 @@ func _initialize() -> void:
 	t.sel = ids.find("difficulty"); t._unhandled_input(_key(KEY_RIGHT))
 	check(game.diff != "medium" and game.view == "main", "left/right change the difficulty")
 	game.set_diff("medium")
+	var player_before = game.music._active
 	t.sel = 0; t._unhandled_input(_key(KEY_ENTER))
 	check(game.view == "play" and game.li == game.last_level, "Play continues from the last level")
+	check(game.music._active != player_before and game.music._active.get_playback_position() < 0.5, "starting from the menu restarts the song")
+	player_before = game.music._active
+	game.load_level(game.li)
+	check(game.music._active == player_before, "retrying a level keeps the song going")
+	game.view = "menu"; game.aim = game.menu_box(game.li).get_center(); game.press()
+	check(game.music._active != player_before, "picking a level on the grid restarts the song")
 	game._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "main", "Esc during play opens the main menu")
 	t._unhandled_input(_key(KEY_ESCAPE))
