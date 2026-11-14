@@ -26,7 +26,7 @@ function key(r, withShots = true) {
   const p = r.p, sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
   const spd = sp < 2 ? 0 : sp < 6 ? 1 : 2;
   const dir = spd === 0 ? 0 : Math.floor((Math.atan2(p.vy, p.vx) + Math.PI) / (2 * Math.PI) * 8) % 8;
-  const base = [Math.floor(p.x / 30), Math.floor(p.y / 30), r.phased ? 1 : 0, r.g, r.rope ? 1 : 0, p.ammo, spd, dir];
+  const base = [r.room, Math.floor(p.x / 30), Math.floor(p.y / 30), r.phased ? 1 : 0, r.g, r.rope ? 1 : 0, p.ammo, spd, dir];
   return (withShots ? [...base, Math.floor(r.t / 40) % 4, r.shots] : [...base, Math.floor(r.t / 20) % 8]).join(',');
 }
 

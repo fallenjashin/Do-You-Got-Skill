@@ -15,7 +15,10 @@ static var data: Dictionary = {}
 
 # --- run state ---
 var level_index: int
-var L: Dictionary          # level definition
+var L: Dictionary          # current screen's definition (screen 1 is the level itself)
+var rooms: Array = []      # every screen of the level: [level, *level.rooms]
+var room := 0              # which screen you're on
+var entry_ammo := 0        # shots you had when you entered this screen (respawn gets them back)
 var d: Dictionary          # difficulty settings
 var diff: String
 var ammo_max: int
@@ -73,9 +76,11 @@ func _init(index: int = 0, difficulty: String = "medium") -> void:
 	level_index = index
 	diff = difficulty
 	L = data.levels[index]
+	rooms = [L] + L.get("rooms", [])
 	d = data.difficulties[difficulty]
 	ammo_max = int(L.ammo) + int(d.ammo)
 	ammo = ammo_max
+	entry_ammo = ammo
 	px = float(L.start[0])
 	py = float(L.start[1])
 	orbs = _pts(L.get("o", []))
@@ -86,6 +91,60 @@ func _init(index: int = 0, difficulty: String = "medium") -> void:
 		ships.append({"lock": null, "firing": false})
 	for tp in L.get("tp", []):
 		tps.append({"ax": float(tp[0]), "ay": float(tp[1]), "bx": float(tp[2]), "by": float(tp[3]), "cd": 0.0})
+
+
+## Multi-screen levels: the goal of every screen but the last is an exit teleporter.
+## Shots carry over; speed carries over only on difficulties with "keep" (Hard and up).
+func _enter_room(k: int, keep_speed: bool) -> void:
+	room = k
+	L = rooms[k]
+	px = float(L.start[0])
+	py = float(L.start[1])
+	if not keep_speed:
+		vx = 0.0
+		vy = 0.0
+	grounded = false
+	orbs = _pts(L.get("o", []))
+	reds = _pts(L.get("red", []))
+	purs = _pts(L.get("pur", []))
+	gravs = _pts(L.get("grav", []))
+	tps = []
+	for tp in L.get("tp", []):
+		tps.append({"ax": float(tp[0]), "ay": float(tp[1]), "bx": float(tp[2]), "by": float(tp[3]), "cd": 0.0})
+	ships = []
+	for sh in L.get("ship", []):
+		ships.append({"lock": null, "firing": false})
+	g = 1.0
+	grav_cd = 0
+	last_tp = []
+	rope = null
+	phased = false
+	phase_cd = 0
+	plat = -1
+	knock_cd = 0
+	lock_warn = false
+	entry_ammo = ammo
+
+
+func is_last_room() -> bool:
+	return room == rooms.size() - 1
+
+
+## After dying on screen 2 or later: back to the start of that screen, standing still, with the
+## shots you entered it with. The clock keeps running. Returns false on screen 1 (restart the level).
+func respawn() -> bool:
+	if not dead or room == 0:
+		return false
+	dead = false
+	death_by = ""
+	var a := entry_ammo
+	vx = 0.0
+	vy = 0.0
+	_enter_room(room, false)
+	ammo = a
+	entry_ammo = a
+	events.append("respawn")
+	return true
 
 
 static func _pts(arr: Array) -> Array:
@@ -437,6 +496,9 @@ func tick() -> String:
 			if not lock_warn:
 				lock_warn = true
 				events.append("locked")
+		elif not is_last_room():
+			_enter_room(room + 1, d.get("keep", false))
+			events.append("room")
 		else:
 			done = true
 			events.append("win")
@@ -449,8 +511,10 @@ func tick() -> String:
 ## Deep copy (used by Easy mode's trajectory preview).
 func clone() -> RefCounted:
 	var c = get_script().new(level_index, diff)  # works even before Godot builds its class index
+	c.room = room
+	c.L = L
 	for prop in ["px", "py", "vx", "vy", "ammo", "grounded", "phased", "phase_cd", "g", "grav_cd",
-			"t", "shots", "started", "done", "dead", "lock_warn", "plat", "knock_cd", "death_by"]:
+			"t", "shots", "started", "done", "dead", "lock_warn", "plat", "knock_cd", "death_by", "entry_ammo"]:
 		c.set(prop, get(prop))
 	c.orbs = orbs.duplicate(true)
 	c.reds = reds.duplicate(true)

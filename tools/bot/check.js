@@ -6,7 +6,7 @@ const sel = (process.argv[3] || `0-${C.LEVELS.length - 1}`).split(',').flatMap(p
   const [a, b] = p.split('-').map(Number); return b === undefined ? [a] : Array.from({ length: b - a + 1 }, (_, k) => a + k); });
 const TRIES = +(process.argv[4] || 2), BUDGET = +(process.argv[5] || 60000);
 const MECH = { latch: 'swing', phase: 'phase', tp: 'teleport', grav: 'gravity', knock: 'pusher', ride: 'elevator', orb: 'orb' };
-function key(r) { const p = r.p; return [Math.floor(p.x / 30), Math.floor(p.y / 30), r.phased ? 1 : 0, r.g, r.rope ? 1 : 0, p.ammo, Math.floor(r.t / 20) % 8].join(','); }
+function key(r) { const p = r.p; return [r.room, Math.floor(p.x / 30), Math.floor(p.y / 30), r.phased ? 1 : 0, r.g, r.rope ? 1 : 0, p.ammo, Math.floor(r.t / 20) % 8].join(','); }
 function solve(i) {
   const s0 = C.newRun(i, diff); s0.started = true; s0.used = {};
   const arch = new Map([[key(s0), { s: structuredClone(s0), v: 0 }]]); const keys = [...arch.keys()];

@@ -27,7 +27,7 @@ with GitHub Desktop and press F5 in Godot.
 - `tools/bot/`: Node bots that read `data/levels.json`. `check.js` (solver: beatable? which mechanics
   used?), `par.js` (fewest-shot par), `rates.js` (random-play difficulty), `golden.js` (reference runs).
 - `tests/test_parity.gd` (replays 598 JS reference runs in Godot, plus every stored par path; must all match) and
-  `tests/test_game.gd` (drives the real scene; 78 checks). CI runs both on every push.
+  `tests/test_game.gd` (drives the real scene; 87 checks). CI runs both on every push.
 - `.github/workflows/web.yml`: tests, then exports Web and deploys GitHub Pages
   (https://fallenjashin.github.io/Do-You-Got-Skill/).
 - `marketing/`: title screen and transparent neon sign PNGs. `CREDITS.md`: required attributions.
@@ -63,6 +63,13 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 - Moving objects are drawn filled; static walls are neon outlines; anything red kills.
 - Music volume is in 1% steps (main-menu slider); V mutes. Starting a level from a menu restarts its song; retrying doesn't.
 - Leaderboard is a placeholder until there's a Steam app.
+- **Finals are 3 screens** (`rooms` in build_levels.py `ROOMS`). Screen 1 is the original layout; its
+  goal is an exit teleporter (green rings), the last screen ends on the green dot. Shots carry over
+  between screens; speed carries over on Hard/Master/God (`"keep": true` in difficulties), not on
+  Easy/Medium. Dying on screen 2+ respawns at that screen's start, clock keeps running (God Mode: still
+  one life). Every screen starts on safe floor (x < 200) so a respawn can't trap you. Finals records
+  use new slots (`key()` adds `:3s`), so old one-screen times don't count. Ghosts store
+  `x + 2000 * screen`. Check screens with `node tools/bot/rooms.js <diff> 50-59`.
 
 ## Open items / next steps
 
@@ -74,11 +81,14 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   `python3 tools/levels/build_levels.py --par-file /tmp/x.jsonl`. Stored in `tools/levels/par.json`
   keyed by a fingerprint of level + difficulty + tuning + `PAR_BOT_VERSION` (bump it when the bot
   changes; old values are dropped). Re-runs only ever lower par. `build_levels.py` writes `par` and
-  `par_paths` into levels.json. **Status: see which difficulties are filled in `data/levels.json`.**
+  `par_paths` into levels.json. **Status: medium is filled for levels 1-50 except 25, 44, 45 (no win found); easy, hard, master and all finals are empty.**
   Cloud background jobs die a few minutes after a reply ends: run them in the foreground in chunks.
 - **Watch par** (game.gd `watch_par`, `_replay_step`): P / results button replays `par_paths` through the
   real sim with a 50-tick look before the first shot; input locked; never saves records or ghosts;
   off in God Mode. `test_parity.gd` checks every stored path wins at exactly par.
+- **Finals par is empty** ("—"): par.js's budget is too small for 3 screens. On Easy/Medium you
+  arrive standing, so finals par = sum of per-screen pars (run par on each screen as its own level,
+  like rooms.js does). Hard+ can do better by carrying speed, so set it by hand from good runs.
 - **Web deploy:** `tools/web/cachebust.sh` (unique game-data name) and `tools/web/smoke.py` (headless
   Chrome must load the build, reach a level and fire; nothing deploys otherwise). Run both locally
   after a web export if you touch the export or the HTML.

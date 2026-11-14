@@ -237,6 +237,37 @@ func _initialize() -> void:
 	var sv2 = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
 	check(int(sv2.get("last", -1)) == 17, "the last level played is saved for Play/continue")
 	check(FileAccess.file_exists("user://test_save.json"), "progress saved to disk")
+	# multi-screen finals: exit teleporter -> next screen; shots carry; speed only on Hard+
+	var finals := []
+	for i in game.level_total():
+		if game.data.levels[i].has("rooms"): finals.append(i)
+	check(finals.size() == 10 and finals.all(func(i): return game.data.levels[i].rooms.size() == 2), "all 10 finals have 3 screens")
+	var fi: int = finals[0]
+	game.set_diff("medium"); game.load_level(fi); game.sim.started = true
+	var ex: Array = game.sim.L.goal
+	game.sim.px = float(ex[0]); game.sim.py = float(ex[1]); game.sim.vx = 6.0; game.sim.vy = -3.0; game.sim.ammo = 1
+	ticks(1)
+	var r1: Dictionary = game.sim.rooms[1]
+	check(game.sim.room == 1 and not game.sim.done, "touching the exit teleporter goes to screen 2, not the finish")
+	check(game.sim.px == float(r1.start[0]) and game.sim.vx == 0.0 and game.sim.vy == 0.0, "on Medium you arrive standing still at the screen's start")
+	check(game.sim.ammo == 1, "shots carry over to the next screen")
+	game.set_diff("hard"); game.load_level(fi); game.sim.started = true
+	game.sim.px = float(ex[0]); game.sim.py = float(ex[1]); game.sim.vx = 6.0; game.sim.vy = -3.0
+	ticks(1)
+	check(game.sim.room == 1 and game.sim.vx > 5.0, "on Hard your speed carries into the next screen")
+	var deaths0: int = game.deaths
+	game.sim.px = 500.0; game.sim.py = 508.0; game.sim.vx = 0.0; game.sim.vy = 2.0   # into the floor spikes
+	ticks(1)
+	check(game.li == fi and game.sim.room == 1 and not game.sim.dead and game.deaths == deaths0 + 1, "dying on screen 2 respawns on screen 2")
+	check(game.sim.px == float(r1.start[0]) and game.sim.t > 0, "back at the screen's start, clock still running")
+	game.sim._enter_room(2, false)
+	check(game.sim.is_last_room(), "screen 3 is the last screen")
+	var gl: Array = game.sim.L.goal
+	game.sim.px = float(gl[0]); game.sim.py = float(gl[1]); game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(1)
+	check(game.sim.done and game.best.has("hard:%d:3s" % fi), "the green dot on screen 3 finishes; record goes in the 3-screen slot")
+	game.set_diff("medium")
+
 
 	# ---- "Watch par": the bot plays the stored par run through the real game
 	game.set_diff("medium"); game.load_level(0)

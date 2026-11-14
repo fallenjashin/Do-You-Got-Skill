@@ -20,11 +20,13 @@ func _init() -> void:
 		var trace_i := 0
 		var res := ""
 		var err := 0.0
-		for f in 1500:
+		for f in 6000:
 			while ai < acts.size() and int(acts[ai][0]) == sim.t:
 				sim.fire(float(acts[ai][1]), float(acts[ai][2]))
 				ai += 1
 			res = sim.tick()
+			if res == "dead" and sim.respawn():   # screens 2+: back to the screen's start, like the game
+				res = ""
 			sim.events.clear()
 			if sim.t % 10 == 0 and trace_i < c.trace.size():
 				var tr: Array = c.trace[trace_i]
@@ -39,7 +41,8 @@ func _init() -> void:
 		err = maxf(err, maxf(absf(sim.px - float(fin[0])), absf(sim.py - float(fin[1]))))
 		worst = maxf(worst, err)
 		by_result[got] = by_result.get(got, 0) + 1
-		if got != want or sim.t != int(c.t) or sim.shots != int(c.shots) or err > TOL:
+		var room_ok: bool = fin.size() < 8 or sim.room == int(fin[7])
+		if got != want or sim.t != int(c.t) or sim.shots != int(c.shots) or err > TOL or not room_ok:
 			failed += 1
 			if failed <= 10:
 				print("MISMATCH level %d %s %s: want %s@%d got %s@%d shots %d/%d err %s" % [
