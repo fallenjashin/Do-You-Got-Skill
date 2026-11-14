@@ -38,7 +38,8 @@ Code: `scripts/title.gd`. Images of the sign for store pages / social posts are 
 | Main menu | Esc | B (from the level grid) |
 | Switch aim style | M (or the button on the level screen) | — |
 | Neon wall colour: by difficulty / by world | T (or the button on the level screen) | — |
-| Music volume (100 / 70 / 40 / off) | V (or the button on the level screen) | — |
+| Music volume | Main menu → Music: ←/→ = 1%, Shift = 10%, or click/drag the bar | D-pad 1%, LB/RB 10% |
+| Mute / unmute music | V (or the Music button on the level grid) | — |
 | Credits | C (or the button on the level screen) | — |
 | Level screen | click a difficulty, then a level | LB/RB difficulty, D-pad pick, A play |
 
@@ -95,8 +96,8 @@ anything visual goes in `game.gd`.
 CREDITS.md and the in-game Credits screen). Each of the 10 worlds has its own track; Finals 1–5,
 Finals 6–9, the Final Exam and God Mode each have their own too. The files in `assets/music/`
 are the artist's untouched loops; loudness differences are evened out in `scripts/music.gd`
-(`GAIN_DB`). Tracks crossfade when the track changes. Volume: **V** or the "Music" button on the
-level screen (100% → 70% → 40% → off); it's saved.
+(`GAIN_DB`). Tracks crossfade when the track changes. Volume: main menu → Music, in 1% steps
+(←/→, Shift for 10%, or click/drag the bar); **V** mutes/unmutes. It's saved.
 
 **To change which track plays where:** edit `WORLD_TRACKS` (and the finals / God Mode constants)
 at the top of `scripts/music.gd`.

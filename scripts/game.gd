@@ -8,7 +8,6 @@ const SfxScript := preload("res://scripts/sfx.gd")
 const MusicScript := preload("res://scripts/music.gd")
 const TitleScript := preload("res://scripts/title.gd")
 const TITLE_VIEWS := ["title", "main", "leaderboard"]
-const MUSIC_STEPS := [1.0, 0.7, 0.4, 0.0]
 const W := 960.0
 const H := 540.0
 const DIFFS := ["easy", "medium", "hard", "master", "god"]
@@ -75,7 +74,9 @@ var title: Node2D  # scripts/title.gd (start screen + main menu)
 var last_level := 0          # what "Play" continues from
 var credits_back := "menu"   # where closing the credits returns to
 var restart_music := false   # set when a level is started from a menu
-var music_volume := 0.7
+var music_volume := 0.7        # 0..1 in 1% steps
+var music_unmuted := 0.7       # volume to come back to after unmuting
+var cursor_hidden := false     # the OS pointer is hidden while playing (we draw our own)
 var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
 
@@ -114,13 +115,14 @@ func _load_save() -> void:
 		if parsed.get("aim", "") in ["go", "fire"]: aim_mode = parsed.aim
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
+		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
 		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, data.levels.size() - 1)
 
 
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume, "last": last_level}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -153,11 +155,28 @@ func load_level(i: int) -> void:
 
 
 ## Music volume steps: 100% → 70% → 40% → off → 100%
-func step_music(dir: int) -> void:
-	var i := MUSIC_STEPS.find(music_volume)
-	music_volume = MUSIC_STEPS[posmod((i if i >= 0 else 0) + dir, MUSIC_STEPS.size())]
+## Music volume, 0..1, kept to whole percents.
+func set_music_volume(v: float) -> void:
+	music_volume = clampf(roundf(v * 100.0) / 100.0, 0.0, 1.0)
+	if music_volume > 0.0:
+		music_unmuted = music_volume
 	music.set_volume(music_volume)
 	_save()
+
+
+func adjust_music(percent: int) -> void:
+	set_music_volume(music_volume + percent / 100.0)
+
+
+## V / the level-grid Music button: mute, or come back to the last volume.
+func toggle_mute() -> void:
+	if music_volume > 0.0:
+		music_unmuted = music_volume
+		music_volume = 0.0
+		music.set_volume(0.0)
+		_save()
+	else:
+		set_music_volume(music_unmuted if music_unmuted > 0.0 else 0.7)
 
 
 ## Starting a level from a menu (Play, or a level on the grid) restarts its song from the top.
@@ -179,10 +198,7 @@ func open_main_menu() -> void:
 
 
 func cycle_music() -> void:
-	var i := MUSIC_STEPS.find(music_volume)
-	music_volume = MUSIC_STEPS[(i + 1) % MUSIC_STEPS.size()] if i >= 0 else MUSIC_STEPS[0]
-	music.set_volume(music_volume)
-	_save()
+	toggle_mute()
 
 
 func start_god() -> void:
@@ -279,7 +295,7 @@ func _unhandled_input(e: InputEvent) -> void:
 				else: open_main_menu()
 			KEY_M: toggle_aim()
 			KEY_T: toggle_neon()
-			KEY_V: cycle_music()
+			KEY_V: toggle_mute()
 			KEY_C:
 				if view == "credits": view = credits_back
 				else:
@@ -336,7 +352,7 @@ func press() -> void:
 		if hit(CREDITS_BOX): credits_back = "menu"; view = "credits"; return
 		if hit(AIM_BOX): toggle_aim(); return
 		if hit(NEON_BOX): toggle_neon(); return
-		if hit(MUSIC_BOX): cycle_music(); return
+		if hit(MUSIC_BOX): toggle_mute(); return
 		for i in DIFFS.size():
 			if hit(diff_box(i)): set_diff(DIFFS[i]); return
 		for i in level_total():
@@ -435,6 +451,10 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
+	var hide := view == "play" and not sim.done
+	if hide != cursor_hidden:
+		cursor_hidden = hide
+		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if hide else Input.MOUSE_MODE_VISIBLE
 	queue_redraw()
 
 
@@ -517,6 +537,8 @@ func _draw() -> void:
 	ui_alpha = 0.3 if view == "play" and not sim.done and (goal_y < 75.0 or sim.py < 75.0) else 1.0
 	_draw_hud()
 	ui_alpha = 1.0
+	if view == "play" and not sim.done:
+		_draw_cursor()
 	if sim.done and view == "play":
 		_draw_done()
 	if view == "menu":
@@ -802,6 +824,47 @@ func _draw_hud() -> void:
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
+## In-game cursor. "Aim where you go": a neon arrow pointing straight away from the ball
+## (the way you'll fly). "Aim where you fire": a neon bomb with a sparking fuse where the blast goes.
+func _draw_cursor() -> void:
+	var p := Vector2(sim.px, sim.py)
+	var d := aim - p
+	var dir := d.normalized() if d.length() > 0.5 else Vector2.UP
+	var perp := Vector2(-dir.y, dir.x)
+	var a := 1.0 if sim.ammo > 0 else 0.35
+	var t := Time.get_ticks_msec() / 1000.0
+	if aim_mode == "go":
+		var c := neon()
+		var tip := aim
+		var shape := PackedVector2Array([tip, tip - dir * 14 + perp * 10, tip - dir * 10 + perp * 3.5, tip - dir * 26 + perp * 3.5,
+			tip - dir * 26 - perp * 3.5, tip - dir * 10 - perp * 3.5, tip - dir * 14 - perp * 10])
+		var loop := shape.duplicate()
+		loop.append(shape[0])
+		for layer in [[9.0, 0.08], [5.0, 0.2]]:
+			draw_polyline(loop, Color(c, layer[1] * a), layer[0], true)
+		draw_colored_polygon(shape, Color(c.lightened(0.55), 0.92 * a))
+		draw_polyline(loop, Color(c, a), 1.5, true)
+	else:
+		var c := Color("#ff3df2")
+		var center := aim
+		for layer in [[21.0, 0.06], [16.0, 0.12]]:
+			draw_circle(center, layer[0], Color(c, layer[1] * a))
+		draw_circle(center, 12.0, Color(Color("#1a1d2e"), a))
+		draw_arc(center, 12.0, 0, TAU, 32, Color(c, a), 2.0, true)
+		draw_circle(center + Vector2(-4, -4), 2.8, Color(1, 1, 1, 0.45 * a))   # shine
+		# fuse leans away from the ball, spark at the tip
+		var base := center + dir * 12.0
+		var tipf := base + dir * 9.0 + perp * 3.5 * sin(t * 6.0)
+		draw_rect(Rect2(base - Vector2(3.5, 3.5), Vector2(7, 7)), Color(Color("#2a2f44"), a))
+		draw_line(base, tipf, Color(Color("#c9b38a"), a), 2.0, true)
+		var spark := 4.0 + 2.0 * sin(t * 30.0)
+		for k in 4:
+			var ang := t * 9.0 + k * PI / 4.0
+			draw_line(tipf - Vector2(cos(ang), sin(ang)) * spark, tipf + Vector2(cos(ang), sin(ang)) * spark, Color(Color("#ffd166"), a), 1.4)
+		draw_circle(tipf, 1.8, Color(1, 0.95, 0.7, a))
+		draw_circle(center, 1.2, Color(c.lightened(0.5), a))   # exact aim point
+
+
 func _draw_done() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.78))
 	if one_life():
@@ -833,7 +896,7 @@ func _draw_menu() -> void:
 	draw_rect(NEON_BOX, C_PANEL_HI if hit(NEON_BOX) else C_PANEL)
 	text("Neon: by %s ⇄" % neon_mode, NEON_BOX.get_center().x, NEON_BOX.position.y + 20, 13, neon(), "c", true)
 	draw_rect(MUSIC_BOX, C_PANEL_HI if hit(MUSIC_BOX) else C_PANEL)
-	text("Music: %s ⇄" % ("off" if music_volume <= 0.0 else "%d%%" % roundi(music_volume * 100)), MUSIC_BOX.get_center().x, MUSIC_BOX.position.y + 20, 13, C_TEXT, "c", true)
+	text("Music: %s" % ("muted" if music_volume <= 0.0 else "%d%%" % roundi(music_volume * 100)), MUSIC_BOX.get_center().x, MUSIC_BOX.position.y + 20, 13, C_TEXT, "c", true)
 	draw_rect(AIM_BOX, C_PANEL_HI if hit(AIM_BOX) else C_PANEL)
 	text("Aim: %s ⇄" % ("where you go" if aim_mode == "go" else "where you fire"), AIM_BOX.get_center().x, AIM_BOX.position.y + 20, 13, C_SHOT, "c", true)
 	for i in DIFFS.size():

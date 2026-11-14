@@ -62,9 +62,31 @@ func _initialize() -> void:
 	check(game.view == "credits", "Credits opens from the main menu")
 	game.press()
 	check(game.view == "main", "closing credits returns to the main menu")
-	var mv: float = game.music_volume
-	t.sel = ids.find("music"); t._unhandled_input(_key(KEY_LEFT))
-	check(game.music_volume != mv, "left/right change the music volume")
+	game.set_music_volume(0.5)
+	t.sel = ids.find("music"); t._unhandled_input(_key(KEY_RIGHT))
+	check(is_equal_approx(game.music_volume, 0.51), "right arrow raises the volume by 1%")
+	var held := _key(KEY_LEFT); held.echo = true
+	t._unhandled_input(held); t._unhandled_input(held)
+	check(is_equal_approx(game.music_volume, 0.49), "holding left keeps lowering it 1% at a time")
+	var big := _key(KEY_RIGHT); big.shift_pressed = true
+	t._unhandled_input(big)
+	check(is_equal_approx(game.music_volume, 0.59), "shift + right raises it by 10%")
+	var bar: Rect2 = t.slider_rect(ids.find("music"))
+	var click := InputEventMouseButton.new(); click.button_index = MOUSE_BUTTON_LEFT; click.pressed = true
+	click.position = bar.position + Vector2(bar.size.x * 0.25, bar.size.y / 2)
+	t._unhandled_input(click)
+	check(is_equal_approx(game.music_volume, 0.25), "clicking the volume bar sets it (25%)")
+	var drag := InputEventMouseMotion.new(); drag.button_mask = MOUSE_BUTTON_MASK_LEFT
+	drag.position = bar.position + Vector2(bar.size.x * 0.8, bar.size.y / 2)
+	t._unhandled_input(drag)
+	check(is_equal_approx(game.music_volume, 0.8), "dragging the bar slides the volume (80%)")
+	var up := InputEventMouseButton.new(); up.button_index = MOUSE_BUTTON_LEFT; up.pressed = false
+	t._unhandled_input(up)
+	var d0: String = game.diff
+	t.sel = ids.find("difficulty")
+	var held2 := _key(KEY_RIGHT); held2.echo = true
+	t._unhandled_input(held2)
+	check(game.diff == d0, "holding a key doesn't spin through other settings")
 	t.sel = ids.find("difficulty"); t._unhandled_input(_key(KEY_RIGHT))
 	check(game.diff != "medium" and game.view == "main", "left/right change the difficulty")
 	game.set_diff("medium")
@@ -77,8 +99,12 @@ func _initialize() -> void:
 	check(game.music._active == player_before, "retrying a level keeps the song going")
 	game.view = "menu"; game.aim = game.menu_box(game.li).get_center(); game.press()
 	check(game.music._active != player_before, "picking a level on the grid restarts the song")
+	game._process(0.016)
+	check(game.cursor_hidden, "the normal mouse pointer is hidden while playing")
 	game._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "main", "Esc during play opens the main menu")
+	game._process(0.016)
+	check(not game.cursor_hidden, "and comes back in the menu")
 	t._process(0.1)
 	check(game.music.current == "00_title_pink_bloom", "opening the menu mid-game brings the title song back")
 	t._unhandled_input(_key(KEY_ESCAPE))
@@ -189,12 +215,17 @@ func _initialize() -> void:
 	check(game.view == "credits", "Credits button opens the credits screen")
 	game.press()
 	check(game.view == "menu", "clicking closes credits")
-	game.music_volume = 0.7; game.cycle_music()
-	check(game.music_volume == 0.4, "V lowers music 70% -> 40%")
-	game.view = "menu"; game.aim = game.MUSIC_BOX.get_center(); game.press(); game.press()
-	check(game.music_volume == 1.0, "level-screen button cycles 40% -> off -> 100%")
+	game.set_music_volume(0.73)
+	game._unhandled_input(_key(KEY_V))
+	check(game.music_volume == 0.0, "V mutes the music")
+	game._unhandled_input(_key(KEY_V))
+	check(game.music_volume == 0.73, "V again brings back the same volume")
+	game.view = "menu"; game.aim = game.MUSIC_BOX.get_center(); game.press()
+	check(game.music_volume == 0.0, "level-grid Music button mutes")
+	game.press()
+	check(game.music_volume == 0.73, "and unmutes")
 	var sv = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
-	check(float(sv.get("music", -1)) == 1.0, "music volume is saved")
+	check(float(sv.get("music", -1)) == 0.73, "music volume is saved")
 	game.view = "play"
 
 	# neon wall colour: follows difficulty by default, or the level's world

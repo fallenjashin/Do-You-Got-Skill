@@ -35,6 +35,7 @@ var stars: Array = []
 var parts: Array = []
 var still := false          # no flicker/hum (used when exporting the sign as an image)
 var sign_only := false      # draw just the sign, no sky (transparent image export)
+var dragging := false       # dragging the music volume bar
 
 
 func _ready() -> void:
@@ -60,7 +61,7 @@ func items() -> Array:
 		{"id": "select", "label": "Select Level", "value": "", "c": C_CYAN},
 		{"id": "difficulty", "label": "Difficulty", "value": d.label, "opt": true, "c": game.DIFF_COLOR[game.diff]},
 		{"id": "leaderboard", "label": "Leaderboard", "value": "soon", "c": C_VIOLET},
-		{"id": "music", "label": "Music", "value": "off" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA},
+		{"id": "music", "label": "Music", "value": "muted" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA, "slider": true},
 		{"id": "neon", "label": "Neon", "value": "by " + game.neon_mode, "opt": true, "c": C_MAGENTA},
 		{"id": "aim", "label": "Aim", "value": "where you go" if game.aim_mode == "go" else "where you fire", "opt": true, "c": C_MAGENTA},
 		{"id": "credits", "label": "Credits", "value": "", "c": C_VIOLET},
@@ -72,6 +73,12 @@ func items() -> Array:
 
 func item_rect(i: int) -> Rect2:
 	return Rect2(MENU_X, MENU_Y + i * ROW, 320, 34)
+
+
+## The volume bar inside the Music row (click or drag to set; ←/→ = 1%, Shift = 10%).
+func slider_rect(i: int) -> Rect2:
+	var r := item_rect(i)
+	return Rect2(r.position.x + 118, r.position.y + 13, 120, 8)
 
 
 func ball_spot(i: int) -> Vector2:
@@ -120,21 +127,37 @@ func activate(i: int, dir := 1) -> void:
 			game.view = "credits"
 		"quit":
 			get_tree().quit()
+		"music":
+			game.toggle_mute()
 		_:
 			change(i, dir)
 			return
 	game.sfx.beep(660, 0.08, "sine", 0.06)
 
 
+func _index_of(id: String) -> int:
+	var list := items()
+	for i in list.size():
+		if list[i].id == id: return i
+	return -1
+
+
+func _set_from_slider(x: float) -> void:
+	var r := slider_rect(_index_of("music"))
+	game.set_music_volume((x - r.position.x) / r.size.x)
+
+
 func change(i: int, dir: int) -> void:
 	var it: Dictionary = items()[i]
+	if it.id != "music":
+		dir = signi(dir)   # big steps only matter for the volume slider
 	match it.id:
 		"difficulty":
 			var k: int = game.DIFFS.find(game.diff)
 			game.set_diff(game.DIFFS[posmod(k + dir, game.DIFFS.size())])
 			game.load_level(game.last_level)   # reload so the run uses the new rules
 			game.view = "main"
-		"music": game.step_music(dir)
+		"music": game.adjust_music(dir)
 		"neon": game.toggle_neon()
 		"aim": game.toggle_aim()
 		_: return
@@ -160,21 +183,37 @@ func _unhandled_input(e: InputEvent) -> void:
 	# main menu
 	if trans < 1.0:
 		return
+	var music_i := _index_of("music")
 	if e is InputEventMouseMotion:
+		if dragging and e.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			_set_from_slider(e.position.x)
+			return
+		dragging = false
 		for i in items().size():
 			if item_rect(i).grow(4).has_point(e.position):
 				set_sel(i)
-	elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+	elif e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+		if not e.pressed:
+			dragging = false
+			return
+		if music_i >= 0 and slider_rect(music_i).grow_individual(6, 10, 6, 10).has_point(e.position):
+			set_sel(music_i)
+			dragging = true
+			_set_from_slider(e.position.x)
+			return
 		for i in items().size():
 			if item_rect(i).grow(4).has_point(e.position):
 				set_sel(i)
 				activate(i, 1)
 	elif e is InputEventKey and e.pressed:
+		if e.echo and items()[sel].id != "music":
+			return   # holding a key only repeats on the volume slider
+		var step := 10 if e.shift_pressed else 1
 		match e.keycode:
 			KEY_UP, KEY_W: set_sel(sel - 1)
 			KEY_DOWN, KEY_S: set_sel(sel + 1)
-			KEY_LEFT, KEY_A: change(sel, -1)
-			KEY_RIGHT, KEY_D: change(sel, 1)
+			KEY_LEFT, KEY_A: change(sel, -step)
+			KEY_RIGHT, KEY_D: change(sel, step)
 			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: activate(sel)
 			KEY_ESCAPE: game.resume_play()
 	elif e is InputEventJoypadButton and e.pressed:
@@ -183,6 +222,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			JOY_BUTTON_DPAD_DOWN: set_sel(sel + 1)
 			JOY_BUTTON_DPAD_LEFT: change(sel, -1)
 			JOY_BUTTON_DPAD_RIGHT: change(sel, 1)
+			JOY_BUTTON_LEFT_SHOULDER: change(sel, -10)
+			JOY_BUTTON_RIGHT_SHOULDER: change(sel, 10)
 			JOY_BUTTON_A: activate(sel)
 			JOY_BUTTON_B: game.resume_play()
 
@@ -368,10 +409,21 @@ func _draw_menu(k: float) -> void:
 			draw_rect(r, Color(c.lightened(0.5), 0.9 * a), false, 1.5)
 		var y := r.position.y + 23
 		_text_l(it.label, r.position.x + 14, y, 18, Color(C_TEXT if on else C_SUB, a), on)
-		if it.value != "":
+		if it.get("slider", false):
+			var sr := slider_rect(i)
+			sr.position.x = r.position.x + 118
+			var v: float = game.music_volume
+			draw_rect(sr, Color(C_DIM, 0.35 * a))
+			draw_rect(Rect2(sr.position, Vector2(sr.size.x * v, sr.size.y)), Color(c, (0.9 if on else 0.5) * a))
+			var knob := Vector2(sr.position.x + sr.size.x * v, sr.get_center().y)
+			if on:
+				draw_circle(knob, 9.0, Color(c, 0.18 * a))
+			draw_circle(knob, 5.5, Color(C_TEXT if on else C_SUB, a))
+			_text_r(("‹ %s ›" % it.value) if on else it.value, r.end.x - 12, y, 14, Color(c if on else C_DIM, a), on)
+		elif it.value != "":
 			var v: String = ("‹ %s ›" % it.value) if it.get("opt", false) and on else it.value
 			_text_r(v, r.end.x - 12, y, 14, Color(c if on else C_DIM, a), on)
-	var hint := "↑ ↓ choose   ← → change   enter select   esc back to game"
+	var hint := "↑ ↓ choose   ← → change (shift ×10)   enter select   esc back to game"
 	_text(hint, MENU_X + 160, MENU_Y + list.size() * ROW + 26, 11, Color(C_DIM, k))
 
 
