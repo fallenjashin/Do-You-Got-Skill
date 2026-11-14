@@ -1,0 +1,65 @@
+# On every push to main: run the tests, export the web version, publish it to GitHub Pages.
+# Play link: https://fallenjashin.github.io/Do-You-Got-Skill/
+name: Test and publish web version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+  TEMPLATE_DIR: 4.7.2.stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and the web export template
+        run: |
+          curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/Godot_v${GODOT_VERSION}_linux.x86_64.zip
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
+          curl -sSL -o templates.tpz https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/Godot_v${GODOT_VERSION}_export_templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/$TEMPLATE_DIR
+          unzip -q -j templates.tpz templates/version.txt templates/web_nothreads_release.zip -d ~/.local/share/godot/export_templates/$TEMPLATE_DIR
+          rm templates.tpz godot.zip
+
+      - name: Import project
+        run: godot --headless --path . --import || true
+
+      - name: Physics matches the prototype
+        run: godot --headless --path . -s tests/test_parity.gd
+
+      - name: Gameplay test
+        run: godot --headless --path . -s tests/test_game.gd
+
+      - name: Export web version
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -f build/web/index.wasm
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

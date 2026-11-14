@@ -73,6 +73,15 @@ tools/bot/                ← the level-testing bots (need Node.js)
 **Rule of thumb:** gameplay changes go in `sim.gd` (and must keep the tests green);
 anything visual goes in `game.gd`.
 
+## Share / play in a browser
+
+Every push to `main` runs both tests, exports the web version and publishes it to
+**https://fallenjashin.github.io/Do-You-Got-Skill/** (see `.github/workflows/web.yml`).
+One-time setup: repo **Settings → Pages → Source: GitHub Actions**.
+
+To build locally: Godot → Project → Export → pick "Web" or "Windows" → Export Project
+(needs Godot's export templates: Editor → Manage Export Templates → Download).
+
 ## Run the tests
 
 From this folder (replace `godot` with the path to your Godot executable):

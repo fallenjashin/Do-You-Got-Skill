@@ -74,6 +74,10 @@ func _ready() -> void:
 	font.font_names = PackedStringArray(["Inter", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"])
 	font_bold = font.duplicate()
 	font_bold.font_weight = 750
+	# symbols (☰ ⇄ ★ ✓ …) come from a tiny bundled DejaVu subset, so they show
+	# everywhere, including the web build where system fonts aren't available
+	font.fallbacks = [load("res://assets/fonts/symbols.ttf")]
+	font_bold.fallbacks = [load("res://assets/fonts/symbols-bold.ttf")]
 	sfx = SfxScript.new()
 	add_child(sfx)
 	_load_save()
