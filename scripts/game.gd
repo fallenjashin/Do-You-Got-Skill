@@ -885,7 +885,7 @@ func _draw_menu() -> void:
 func _draw_credits() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.96))
 	text("CREDITS", W / 2, 70, 28, C_TEXT, "c", true)
-	text("MUSIC", W / 2, 112, 13, C_ORB, "c", true)
+	text("MUSIC BY DAVIDKBD", W / 2, 112, 13, C_ORB, "c", true)
 	text("\"Code Injection Dark Techno Music Pack\" by DavidKBD", W / 2, 136, 16, C_TEXT, "c", true)
 	text("davidkbd.itch.io  ·  davidkbd.com  ·  cover art and track names by Naitsel", W / 2, 158, 12, C_SUB)
 	text("Licensed under CC BY 4.0 (creativecommons.org/licenses/by/4.0). Tracks used unmodified; volume balanced in-game.", W / 2, 178, 12, C_SUB)
@@ -894,7 +894,7 @@ func _draw_credits() -> void:
 		"10 Space Echoes", "11 I.A.'s Growl", "12 Faceless Crowd", "13 Between Everyone and Anyone", "14 There's Someone Here"]
 	for i in titles.size():
 		text(titles[i], 200 + (i / 7) * 330, 210 + (i % 7) * 20, 12, C_DIM, "l")
-	text("Title theme: \"Pink Bloom\" (itch.io, licensed for commercial use)", W / 2, 352, 12, C_SUB)
+	text("Title theme: \"Pink Bloom\" music track by DavidKBD, from the \"Pink Bloom Synthwave Music Pack\" (davidkbd.itch.io)", W / 2, 352, 12, C_SUB)
 	text("ENGINE", W / 2, 378, 13, C_ORB, "c", true)
 	text("Made with Godot Engine  ·  godotengine.org/license", W / 2, 398, 13, C_TEXT, "c")
 	text("© 2014-present Godot Engine contributors; © 2007-2014 Juan Linietsky, Ariel Manzur. MIT license.", W / 2, 415, 11, C_SUB)
