@@ -5,6 +5,8 @@ extends Node2D
 
 const Sim := preload("res://scripts/sim.gd")
 const SfxScript := preload("res://scripts/sfx.gd")
+const MusicScript := preload("res://scripts/music.gd")
+const MUSIC_STEPS := [1.0, 0.7, 0.4, 0.0]
 const W := 960.0
 const H := 540.0
 const DIFFS := ["easy", "medium", "hard", "master", "god"]
@@ -65,6 +67,8 @@ var ui_alpha := 1.0          # HUD fades when the goal or the ball is underneath
 
 var font: SystemFont
 var font_bold: SystemFont
+var music: Node  # scripts/music.gd
+var music_volume := 0.7
 var sfx: Node  # scripts/sfx.gd (typed loosely so a fresh clone runs before Godot builds its class index)
 
 
@@ -80,7 +84,10 @@ func _ready() -> void:
 	font_bold.fallbacks = [load("res://assets/fonts/symbols-bold.ttf")]
 	sfx = SfxScript.new()
 	add_child(sfx)
+	music = MusicScript.new()
+	add_child(music)
 	_load_save()
+	music.set_volume(music_volume)
 	load_level(0)
 
 
@@ -95,12 +102,13 @@ func _load_save() -> void:
 		if parsed.get("diff", "") in DIFFS: diff = parsed.diff
 		if parsed.get("aim", "") in ["go", "fire"]: aim_mode = parsed.aim
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
+		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
 
 
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "aim": aim_mode, "neon": neon_mode, "music": music_volume}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -125,6 +133,15 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
+	music.play_for_level(li)
+
+
+## Music volume steps: 100% → 70% → 40% → off → 100%
+func cycle_music() -> void:
+	var i := MUSIC_STEPS.find(music_volume)
+	music_volume = MUSIC_STEPS[(i + 1) % MUSIC_STEPS.size()] if i >= 0 else MUSIC_STEPS[0]
+	music.set_volume(music_volume)
+	_save()
 
 
 func start_god() -> void:
@@ -186,6 +203,7 @@ const BTN_NEXT := Rect2(W / 2 + 85, 330, 130, 44)
 const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const AIM_BOX := Rect2(770, 26, 170, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
+const MUSIC_BOX := Rect2(228, 26, 130, 30)
 
 func menu_box(i: int) -> Rect2:
 	var col := i % 10
@@ -214,6 +232,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_L, KEY_ESCAPE: view = "play" if view == "menu" else "menu"
 			KEY_M: toggle_aim()
 			KEY_T: toggle_neon()
+			KEY_V: cycle_music()
 	elif e is InputEventJoypadButton and e.pressed:
 		using_pad = true
 		_pad_button(e.button_index)
@@ -261,6 +280,7 @@ func press() -> void:
 	if view == "menu":
 		if hit(AIM_BOX): toggle_aim(); return
 		if hit(NEON_BOX): toggle_neon(); return
+		if hit(MUSIC_BOX): cycle_music(); return
 		for i in DIFFS.size():
 			if hit(diff_box(i)): set_diff(DIFFS[i]); return
 		for i in level_total():
@@ -719,7 +739,7 @@ func _draw_hud() -> void:
 			tip = "Click where you want to fly. The blast fires the opposite way." if aim_mode == "go" else "Click BELOW you to launch up. You fly away from where you fire."
 		text(tip, W / 2, 80, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  aim: %s (M)  ·  T neon colour  ·  R restart  ·  N / B  ·  L levels" % ("where you go" if aim_mode == "go" else "where you fire")
+			"click / tap / space = fire  ·  aim: %s (M)  ·  T neon  ·  V music  ·  R restart  ·  N / B  ·  L levels" % ("where you go" if aim_mode == "go" else "where you fire")
 		text(controls, W / 2, 102, 13, C_DIM)
 
 
@@ -753,6 +773,8 @@ func _draw_menu() -> void:
 	text("Levels", W / 2, 60, 28, C_TEXT, "c", true)
 	draw_rect(NEON_BOX, C_PANEL_HI if hit(NEON_BOX) else C_PANEL)
 	text("Neon: by %s ⇄" % neon_mode, NEON_BOX.get_center().x, NEON_BOX.position.y + 20, 13, neon(), "c", true)
+	draw_rect(MUSIC_BOX, C_PANEL_HI if hit(MUSIC_BOX) else C_PANEL)
+	text("Music: %s ⇄" % ("off" if music_volume <= 0.0 else "%d%%" % roundi(music_volume * 100)), MUSIC_BOX.get_center().x, MUSIC_BOX.position.y + 20, 13, C_TEXT, "c", true)
 	draw_rect(AIM_BOX, C_PANEL_HI if hit(AIM_BOX) else C_PANEL)
 	text("Aim: %s ⇄" % ("where you go" if aim_mode == "go" else "where you fire"), AIM_BOX.get_center().x, AIM_BOX.position.y + 20, 13, C_SHOT, "c", true)
 	for i in DIFFS.size():

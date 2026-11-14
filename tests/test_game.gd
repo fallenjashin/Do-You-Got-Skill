@@ -109,6 +109,23 @@ func _initialize() -> void:
 	check(game.sim.ships[0].lock != null, "gunship locks on to the player")
 	check(game.level_code(12) == "3-3" and game.level_code(55) == "F6", "level codes read world-level")
 
+	# music: right track per world group, looping, volume steps saved
+	game.set_diff("medium"); game.load_level(3)
+	check(game.music.current.ends_with("neon_drive.ogg") and game.music.is_playing(), "worlds 1-5 play Neon Drive")
+	game.load_level(30)
+	check(game.music.current.ends_with("overclock.ogg"), "worlds 6-10 switch to Overclock")
+	game.load_level(31)
+	check(game.music.current.ends_with("overclock.ogg"), "same world group keeps the same track")
+	game.load_level(55)
+	check(game.music.current.ends_with("final_exam.ogg") and game.music._active.stream.loop, "finals play Final Exam, looping")
+	game.music_volume = 0.7; game.cycle_music()
+	check(game.music_volume == 0.4, "V lowers music 70% -> 40%")
+	game.view = "menu"; game.aim = game.MUSIC_BOX.get_center(); game.press(); game.press()
+	check(game.music_volume == 1.0, "level-screen button cycles 40% -> off -> 100%")
+	var sv = JSON.parse_string(FileAccess.open("user://test_save.json", FileAccess.READ).get_as_text())
+	check(float(sv.get("music", -1)) == 1.0, "music volume is saved")
+	game.view = "play"
+
 	# neon wall colour: follows difficulty by default, or the level's world
 	game.neon_mode = "difficulty"; game.set_diff("master"); game.load_level(0)
 	check(game.neon() == game.NEON_BY_DIFF["master"], "neon walls follow difficulty")
