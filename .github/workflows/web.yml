@@ -50,6 +50,18 @@ jobs:
           godot --headless --path . --export-release "Web" build/web/index.html
           test -f build/web/index.wasm
 
+      # GitHub Pages lets browsers cache files for ~10 minutes, and the game data is always
+      # called index.pck, so players could get an old build. Give each build's game data a
+      # unique name (the commit id) so a new deploy is always a new file.
+      - name: Cache-bust the game data
+        run: |
+          cd build/web
+          PCK="game-${GITHUB_SHA::8}.pck"
+          mv index.pck "$PCK"
+          sed -i "s/index\.pck/$PCK/g" index.html
+          grep -q "$PCK" index.html
+          ! grep -q 'index\.pck' index.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
