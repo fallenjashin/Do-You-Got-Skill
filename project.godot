@@ -8,6 +8,7 @@ config_version=5
 config/name="Do You Got Skill"
 config/description="Precision platformer: you only move by recoil."
 run/main_scene="res://scenes/main.tscn"
+config/icon="res://assets/icon/icon.png"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [display]
