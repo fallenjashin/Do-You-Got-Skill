@@ -42,7 +42,7 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
-	check(ids.slice(0, 8) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, credits")
+	check(ids.slice(0, 9) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "stats", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, stats, credits")
 	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
@@ -314,6 +314,35 @@ func _initialize() -> void:
 	game.set_diff("god")
 	check(not game.in_run(), "God Mode is its own category, not a Full Run")
 	game.set_diff("medium")
+
+	# ---- career stats
+	game.stats = {"ticks": 0, "deaths": 0, "shots": 0, "clears": 0, "clear_ticks": 0, "runs": 0, "by_level": {}}
+	game.set_diff("medium"); game.load_level(3)
+	ticks(30)
+	check(game.stats.ticks == 30, "career time counts ticks spent in a level")
+	game.aim = Vector2(game.sim.px, 0); game.press(); ticks(5)
+	check(game.stats.shots == 1, "career counts shots fired (jumps)")
+	game.press()   # no ammo left or a blocked shot must not count if sim refuses
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(1)
+	check(game.stats.clears == 1 and game.stats.clear_ticks == game.sim.t, "career counts clears and their time")
+	var ticks_done: int = game.stats.ticks
+	ticks(30)
+	check(game.stats.ticks == ticks_done, "career time stops on the clear screen")
+	game.load_level(3); game.aim = Vector2(game.sim.px, 0); game.press()
+	var kk: Array = game.sim.L.k[0]
+	game.sim.px = kk[0] + kk[2] / 2.0; game.sim.py = kk[1] + 4.0; ticks(1)
+	check(game.stats.deaths == 1 and game.stats.by_level["3"] == 1, "career counts deaths, per level")
+	game._save()
+	var sv_stats = JSON.parse_string(FileAccess.open(game.save_path, FileAccess.READ).get_as_text())
+	check(sv_stats.stats.deaths == 1 and sv_stats.stats.clears == 1, "career stats are saved")
+	game.stats = {"ticks": 0, "deaths": 0, "shots": 0, "clears": 0, "clear_ticks": 0, "runs": 0, "by_level": {}}
+	game._load_save()
+	check(game.stats.deaths == 1 and game.stats.by_level["3"] == 1, "career stats load back from the save")
+	game.credits_back = "main"; game.view = "stats"
+	game.press()
+	check(game.view == "main", "clicking closes the stats screen")
+	check(game.fmt_play(3725.0 * 60.0) == "1h 02m" and game.fmt_play(95.0 * 60.0) == "1m 35s" and game.fmt_play(42.0 * 60.0) == "42s", "play time formats")
 
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()

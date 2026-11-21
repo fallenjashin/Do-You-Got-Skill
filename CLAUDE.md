@@ -77,6 +77,9 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   `best["runs:<diff>"]`, shots `best["run:s:<diff>"]`. Start: main menu "Full Run", level-grid button, or F.
   B (back) is disabled inside a run; picking a level from the grid or changing difficulty leaves it.
   Pausing is free, so a future Steam leaderboard must verify runs by replay, not trust the clock.
+- **Career stats** (main menu → Career Stats, `game.stats`, saved in save.json): time played (ticks in a
+  level, aiming included, not on the clear screen), deaths (and per level), shots ("jumps"), clears and their
+  summed time, finished runs. Counted from the day it was added; no back-fill. Saved every 10 s of play.
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.

@@ -18,8 +18,8 @@ const C_SUB := Color("#8b93b5")
 const C_DIM := Color("#5d6585")
 const C_SHOT := Color("#ffb347")
 const MENU_X := 600.0
-const MENU_Y := 128.0
-const ROW := 42.0
+const MENU_Y := 118.0
+const ROW := 36.0
 
 var game                      # scripts/game.gd
 var time := 0.0
@@ -64,6 +64,7 @@ func items() -> Array:
 		{"id": "leaderboard", "label": "Leaderboard", "value": "soon", "c": C_VIOLET},
 		{"id": "music", "label": "Music", "value": "muted" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA, "slider": true},
 		{"id": "neon", "label": "Neon", "value": "by " + game.neon_mode, "opt": true, "c": C_MAGENTA},
+		{"id": "stats", "label": "Career Stats", "value": "", "c": C_VIOLET},
 		{"id": "credits", "label": "Credits", "value": "", "c": C_VIOLET},
 	]
 	if not OS.has_feature("web"):
@@ -124,6 +125,9 @@ func activate(i: int, dir := 1) -> void:
 		"leaderboard":
 			lb_level = game.last_level
 			game.view = "leaderboard"
+		"stats":
+			game.credits_back = "main"
+			game.view = "stats"
 		"credits":
 			game.credits_back = "main"
 			game.view = "credits"

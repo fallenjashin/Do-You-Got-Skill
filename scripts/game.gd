@@ -45,7 +45,7 @@ const C_SHIP := Color("#ff4d6d")
 var data: Dictionary
 var sim: Sim
 var li := 0
-var view := "play"            # "play" | "menu" | "credits"
+var view := "play"            # "play" | "menu" | "credits" | "stats"
 var diff := "medium"
 var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
 var aim := Vector2(W / 2, H / 2)
@@ -62,6 +62,11 @@ var new_fewest := false
 var best := {}                # "diff:i" -> ticks, "s:diff:i" -> shots, "god:run", "god:shots"
 var ghosts := {}
 var god := {"total": 0, "shots": 0, "flash": 0, "finished": false}
+## Career stats, saved with the records. Counted from the update that added them; older play isn't known.
+## ticks = time in a level (60 per second, aiming included), shots = blasts fired ("jumps"),
+## clears = levels beaten (repeats count), clear_ticks = their summed times, runs = finished Full/God runs,
+## by_level = deaths per level index.
+var stats := {"ticks": 0, "deaths": 0, "shots": 0, "clears": 0, "clear_ticks": 0, "runs": 0, "by_level": {}}
 ## Full Run (Easy..Master): all 60 levels in order on one clock. The clock counts every tick after your
 ## first shot of an attempt, deaths included, and stops between levels. Menus pause it.
 ## Best time lives in best["run:<diff>"], the best run's cumulative splits in best["runs:<diff>"].
@@ -122,6 +127,13 @@ func _load_save() -> void:
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
+		var st = parsed.get("stats", null)
+		if st is Dictionary:
+			for k in ["ticks", "deaths", "shots", "clears", "clear_ticks", "runs"]:
+				stats[k] = int(st.get(k, 0))
+			var bl = st.get("by_level", {})
+			if bl is Dictionary:
+				for k in bl: stats.by_level[str(k)] = int(bl[k])
 		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, data.levels.size() - 1)
 
 
@@ -139,7 +151,7 @@ func _migrate_old_save() -> void:
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -339,7 +351,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_B: if not one_life() and not in_run(): load_level(li - 1)
 			KEY_L: view = "play" if view == "menu" else "menu"
 			KEY_ESCAPE:
-				if view == "credits": view = credits_back
+				if view in ["credits", "stats"]: view = credits_back
 				else: open_main_menu()
 			KEY_T: toggle_neon()
 			KEY_V: toggle_mute()
@@ -393,7 +405,7 @@ func _pad_aim() -> void:
 
 
 func press() -> void:
-	if view == "credits":
+	if view == "credits" or view == "stats":
 		view = credits_back; return
 	if view == "menu":
 		if hit(CREDITS_BOX): credits_back = "menu"; view = "credits"; return
@@ -428,6 +440,7 @@ func press() -> void:
 	var dir := fire_dir()
 	if not sim.fire(dir.x, dir.y):
 		sfx.beep(120, 0.05, "square", 0.03); return
+	stats.shots += 1
 	shake = 5.0
 	sfx.beep(180 + randf() * 40, 0.09, "sawtooth", 0.06)
 	var n := dir.normalized() if dir.length() > 0 else Vector2.DOWN
@@ -451,6 +464,9 @@ func _physics_process(_delta: float) -> void:
 		if death_face.life <= 0: death_face = {}
 	if view != "play":
 		return
+	if not sim.done:
+		stats.ticks += 1
+		if stats.ticks % 600 == 0: _save()   # every 10 s of play, so a closed tab loses little
 	var counting: bool = in_run() and sim.started and not sim.done and not sim.dead and not run.finished
 	var res := sim.tick()
 	if counting: run.t += 1
@@ -483,6 +499,8 @@ func _physics_process(_delta: float) -> void:
 
 	if res == "dead":
 		deaths += 1; sfx.beep(90, 0.25, "sawtooth", 0.07); shake = 10.0
+		stats.deaths += 1
+		stats.by_level[str(li)] = int(stats.by_level.get(str(li), 0)) + 1
 		if in_run(): run.deaths += 1
 		death_face = {"x": sim.px, "y": sim.py, "g": sim.g, "life": 1.0}
 		burst(sim.px, sim.py, C_SPIKE, 30)
@@ -492,6 +510,7 @@ func _physics_process(_delta: float) -> void:
 		elif not sim.respawn():
 			load_level(li)
 	elif res == "win":
+		stats.clears += 1; stats.clear_ticks += sim.t
 		sfx.beep(660, 0.1, "sine", 0.08)
 		get_tree().create_timer(0.1).timeout.connect(func(): sfx.beep(990, 0.18, "sine", 0.08))
 		if not best.has(skey(li)) or sim.shots < best[skey(li)]:
@@ -501,7 +520,7 @@ func _physics_process(_delta: float) -> void:
 			if not best.has(key(li)) or sim.t < best[key(li)]:
 				best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate()
 			if li == level_total() - 1:
-				god.finished = true
+				god.finished = true; stats.runs += 1
 				if not best.has("god:run") or god.total < best["god:run"]:
 					best["god:run"] = god.total; new_best = true
 				if not best.has("god:shots") or god.shots < best["god:shots"]:
@@ -519,7 +538,7 @@ func _run_level_won() -> void:
 	var ref = best.get("runs:" + diff, null)
 	run.delta = run.t - int(ref[li]) if ref is Array and ref.size() > li else null
 	if li != level_total() - 1: return
-	run.finished = true
+	run.finished = true; stats.runs += 1
 	var rk := "run:" + diff
 	if not best.has(rk) or run.t < int(best[rk]):
 		best[rk] = run.t; best["runs:" + diff] = run.splits.duplicate(); run.new_best = true
@@ -623,6 +642,8 @@ func _draw() -> void:
 		_draw_menu()
 	elif view == "credits":
 		_draw_credits()
+	elif view == "stats":
+		_draw_stats()
 
 
 func _draw_world() -> void:
@@ -1082,6 +1103,70 @@ func _draw_menu() -> void:
 	text(legend, W / 2, 528, 11, C_DIM)
 	draw_rect(CREDITS_BOX, C_PANEL_HI if hit(CREDITS_BOX) else C_PANEL)
 	text("Credits (C)", CREDITS_BOX.get_center().x, CREDITS_BOX.position.y + 16, 11, C_SUB, "c", true)
+
+
+func _cleared_any(i: int) -> bool:
+	var rv := ":3s" if data.levels[i].has("rooms") else ""
+	for d in DIFFS:
+		if best.has(d + ":" + str(i) + rv): return true
+	return false
+
+
+func fmt_play(ticks: float) -> String:
+	var sec := int(ticks / 60.0)
+	if sec >= 3600: return "%dh %02dm" % [sec / 3600, (sec / 60) % 60]
+	if sec >= 60: return "%dm %02ds" % [sec / 60, sec % 60]
+	return "%ds" % sec
+
+
+## Career stats: lifetime totals and averages.
+func _draw_stats() -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.97))
+	text("CAREER STATS", W / 2, 66, 28, C_TEXT, "c", true)
+	var clears: int = stats.clears
+	var deaths: int = stats.deaths
+	var worst := -1
+	var worst_n := 0
+	for k in stats.by_level:
+		if int(stats.by_level[k]) > worst_n: worst_n = int(stats.by_level[k]); worst = int(k)
+	var unique := 0
+	for i in level_total():
+		if _cleared_any(i): unique += 1
+	var left := [
+		["Time played", fmt_play(stats.ticks)],
+		["Levels cleared (total clears)", str(clears)],
+		["Unique levels cleared", "%d / %d" % [unique, level_total()]],
+		["Average clear time", fmt(float(stats.clear_ticks) / clears) if clears > 0 else "—"],
+		["Full runs finished", str(stats.runs)],
+	]
+	var right := [
+		["Total deaths", str(deaths)],
+		["Deaths per level cleared", "%.1f" % (float(deaths) / clears) if clears > 0 else "—"],
+		["Total jumps (shots fired)", str(stats.shots)],
+		["Jumps per level cleared", "%.1f" % (float(stats.shots) / clears) if clears > 0 else "—"],
+		["Deadliest level", "%s %s  ×%d" % [level_code(worst), data.levels[worst].name, worst_n] if worst >= 0 else "—"],
+	]
+	for col in 2:
+		var rows: Array = left if col == 0 else right
+		var x := 60.0 + col * 440.0
+		for r in rows.size():
+			var y := 130.0 + r * 46.0
+			draw_rect(Rect2(x, y - 22, 400, 38), C_PANEL)
+			text(rows[r][0], x + 14, y + 2, 14, C_SUB, "l")
+			text(rows[r][1], x + 386, y + 3, 17, C_TEXT, "r", true)
+	text("CLEARED BY DIFFICULTY", 60, 392, 12, C_ORB, "l", true)
+	for i in DIFFS.size():
+		var d: String = DIFFS[i]
+		var n := 0
+		for lv in level_total():
+			var rv := ":3s" if data.levels[lv].has("rooms") else ""
+			if best.has(d + ":" + str(lv) + rv): n += 1
+		var bx := 60.0 + i * 176.0
+		text(data.difficulties[d].label, bx, 418, 13, DIFF_COLOR[d], "l", true)
+		text("%d / %d" % [n, level_total()], bx, 440, 16, C_TEXT, "l", true)
+		var rb = best.get("run:" + d, null) if d != "god" else best.get("god:run", null)
+		text("best run " + (fmt_run(rb) if rb != null else "—"), bx, 458, 11, C_DIM, "l")
+	text("Counted from the update that added Career Stats.  Click or press Esc to close.", W / 2, 512, 12, C_DIM)
 
 
 ## Required attributions: music (CC BY 4.0), engine (MIT), symbol font (Bitstream Vera).
