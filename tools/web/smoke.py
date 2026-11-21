@@ -61,13 +61,17 @@ with sync_playwright() as pw:
 
     if not problems:
         # 2. drive it: title -> menu -> play, then fire a shot
-        time.sleep(1.5)
+        time.sleep(0.6)
+        if shots: page.screenshot(path=os.path.join(shots, "0_splash.png"))
+        page.keyboard.press("Space"); time.sleep(1.2)     # skips the creator splash
         if shots: page.screenshot(path=os.path.join(shots, "1_title.png"))
         page.keyboard.press("Space"); time.sleep(1.2)
         if shots: page.screenshot(path=os.path.join(shots, "2_menu.png"))
         page.keyboard.press("Enter"); time.sleep(1.2)
         page.mouse.move(900, 300); page.mouse.click(900, 300); time.sleep(1.5)
         if shots: page.screenshot(path=os.path.join(shots, "3_play.png"))
+        page.keyboard.press("l"); time.sleep(1.0)       # level grid: in the web demo most levels show a lock
+        if shots: page.screenshot(path=os.path.join(shots, "4_levels.png"))
 
     for c in console:
         if "SCRIPT ERROR" in c or "USER ERROR" in c or ("[error]" in c and "ERROR:" in c):

@@ -1,5 +1,6 @@
 extends Node2D
 ## Start screen and main menu.
+##   "splash"      the creator logo glitches in (3 s, any key skips), then the title
 ##   "title"       starry sky + slanted neon sign + "press any key"
 ##   "main"        the sign glides left, the menu slides in on the right, and the neon ball
 ##                 pops in as a character that hops between menu items
@@ -20,6 +21,8 @@ const C_SHOT := Color("#ffb347")
 const MENU_X := 600.0
 const MENU_Y := 118.0
 const ROW := 36.0
+const SPLASH_TIME := 3.1   # seconds before the creator splash hands over to the title screen
+const LOGO := preload("res://assets/brand/creator_logo.png")
 
 var game                      # scripts/game.gd
 var time := 0.0
@@ -36,6 +39,8 @@ var parts: Array = []
 var still := false          # no flicker/hum (used when exporting the sign as an image)
 var sign_only := false      # draw just the sign, no sky (transparent image export)
 var dragging := false       # dragging the music volume bar
+var splash_t := 0.0         # seconds into the creator splash
+var splash_cues := 0        # sound cues already played
 
 
 func _ready() -> void:
@@ -49,7 +54,7 @@ func _ready() -> void:
 
 
 func showing() -> bool:
-	return game != null and game.view in ["title", "main", "leaderboard"]
+	return game != null and game.view in ["splash", "title", "main", "leaderboard"]
 
 
 # ---------------------------------------------------------------- menu model
@@ -175,6 +180,12 @@ func _unhandled_input(e: InputEvent) -> void:
 	if not showing():
 		return
 	get_viewport().set_input_as_handled()
+	if game.view == "splash":
+		var skip: bool = (e is InputEventKey and e.pressed and not e.echo) or (e is InputEventMouseButton and e.pressed) \
+			or (e is InputEventJoypadButton and e.pressed) or (e is InputEventScreenTouch and e.pressed)
+		if skip and splash_t > 0.15:
+			game.view = "title"
+		return
 	if game.view == "title":
 		var pressed: bool = (e is InputEventKey and e.pressed and not e.echo) or (e is InputEventMouseButton and e.pressed) \
 			or (e is InputEventJoypadButton and e.pressed) or (e is InputEventScreenTouch and e.pressed)
@@ -257,9 +268,19 @@ func _process(delta: float) -> void:
 	visible = showing()
 	if not visible:
 		return
+	time += delta
+	if game.view == "splash":
+		splash_t += minf(delta, 0.05)   # a slow first frame (shader compile, web load) must not eat the splash
+		if splash_cues < 1 and splash_t > 0.35:
+			splash_cues = 1; game.sfx.beep(140, 0.18, "sawtooth", 0.04, 60)
+		if splash_cues < 2 and splash_t > 1.15:
+			splash_cues = 2; game.sfx.beep(880, 0.10, "square", 0.03, 1400)
+		if splash_t >= SPLASH_TIME:
+			game.view = "title"
+		queue_redraw()
+		return
 	if game.music.current != game.music.TITLE:
 		game.music.play(game.music.TITLE)
-	time += delta
 	if game.view != "title" and trans < 1.0:
 		trans = minf(1.0, trans + delta / TRANSITION)
 		if trans > 0.75 and pop == 0.0:
@@ -302,6 +323,9 @@ static func _rand(n: float) -> float:
 func _draw() -> void:
 	if not showing():
 		return
+	if game.view == "splash":
+		_draw_splash()
+		return
 	var k := _ease(trans)
 	if sign_only:
 		draw_neon_sign(Vector2(480, 270), 1.15, time)
@@ -321,6 +345,38 @@ func _draw() -> void:
 		draw_rect(Rect2(q.p - Vector2(2, 2), Vector2(4, 4)), Color(q.c, q.life))
 	if game.view == "main" and pop > 0.0:
 		_draw_ball()
+
+
+## Creator splash: the logo glitches in (sliced rows and a pink/cyan split that settle), holds, fades out.
+func _draw_splash() -> void:
+	var t := splash_t
+	draw_rect(Rect2(0, 0, W, H), Color("#07070d"))
+	draw_circle(Vector2(90, 40), 330.0, Color(1.0, 0.16, 0.43, 0.035))
+	draw_circle(Vector2(880, 500), 330.0, Color(0.0, 0.94, 1.0, 0.03))
+	var a := clampf((t - 0.35) / 0.5, 0.0, 1.0)
+	if t < 1.15:
+		a *= 0.55 + (0.45 if _rand(floorf(t * 30.0)) >= 0.5 else 0.0)   # flicker on
+	a *= 1.0 - clampf((t - 2.5) / 0.6, 0.0, 1.0)                # fade out
+	var g := clampf(1.0 - (t - 0.35) / 0.8, 0.0, 1.0) if t > 0.35 else 0.0
+	if t > 1.85 and t < 1.97: g = maxf(g, 0.45)                 # one more glitch while it holds
+	var w := 560.0
+	var h := w * LOGO.get_height() / LOGO.get_width()
+	var r := Rect2(W / 2 - w / 2, 262.0 - h / 2, w, h)
+	if a > 0.0:
+		if g > 0.02:
+			draw_texture_rect(LOGO, Rect2(r.position + Vector2(10.0 * g, 0), r.size), false, Color(1.0, 0.16, 0.43, 0.55 * a))
+			draw_texture_rect(LOGO, Rect2(r.position + Vector2(-10.0 * g, 0), r.size), false, Color(0.0, 0.94, 1.0, 0.55 * a))
+		var bands := 18
+		var src_h := float(LOGO.get_height()) / bands
+		for i in bands:
+			var dx := 0.0
+			var n := _rand(floorf(t * 24.0) * 31.0 + i)
+			if g > 0.02 and n > 0.45:
+				dx = (_rand(n * 97.0 + i) - 0.5) * 70.0 * g
+			draw_texture_rect_region(LOGO, Rect2(r.position + Vector2(dx, i * h / bands), Vector2(w, h / bands + 0.6)),
+				Rect2(0, i * src_h, LOGO.get_width(), src_h + 1.0), Color(1, 1, 1, a))
+	for y in range(0, int(H), 4):
+		draw_line(Vector2(0, y), Vector2(W, y), Color(1, 1, 1, 0.03), 1.0)
 
 
 func _draw_sky(k: float) -> void:

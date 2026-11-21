@@ -35,6 +35,17 @@ func _initialize() -> void:
 
 	# ---- start screen and main menu
 	var t: Node2D = game.title
+	check(game.view == "splash", "the game opens on the creator splash")
+	t._unhandled_input(_key(KEY_X))
+	check(game.view == "splash", "the splash ignores a keypress in its first instant")
+	for i in 10: t._process(0.05)    # the splash clock advances at most 0.05 s a frame
+	t._unhandled_input(_key(KEY_X))
+	check(game.view == "title", "any key skips the splash to the start screen")
+	game.view = "splash"; t.splash_t = 0.0
+	for i in 20: t._process(0.05)
+	check(game.view == "splash", "the splash is still showing after 1 s")
+	for i in 50: t._process(0.05)
+	check(game.view == "title", "the splash hands over to the start screen by itself")
 	check(game.view == "title", "the game opens on the start screen")
 	t._unhandled_input(_key(KEY_X))
 	check(game.view == "main", "any key opens the main menu")
@@ -343,6 +354,35 @@ func _initialize() -> void:
 	game.press()
 	check(game.view == "main", "clicking closes the stats screen")
 	check(game.fmt_play(3725.0 * 60.0) == "1h 02m" and game.fmt_play(95.0 * 60.0) == "1m 35s" and game.fmt_play(42.0 * 60.0) == "42s", "play time formats")
+
+	# ---- demo build: the first 15 levels, the rest locked
+	game.set_diff("medium"); game.demo = true
+	check(game.playable_total() == 15, "the demo has 15 playable levels")
+	game.start_from_menu(15)
+	check(game.li != 15, "a locked level doesn't start in the demo")
+	game.load_level(14)
+	check(game.li == 14, "the last demo level loads")
+	game.aim = Vector2(game.sim.px, 0); game.press()
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(2)
+	game._unhandled_input(_key(KEY_N))
+	check(game.view == "demo_end", "Next after the last demo level shows the demo ending")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "menu", "Esc leaves the demo ending for the level grid")
+	game.load_level(14)
+	check(game.li == 14, "the demo ending doesn't break the level")
+	var best_before: int = game.best.size()
+	game.start_run()
+	for lvl in 15:
+		game.aim = Vector2(game.sim.px, 0); game.press()
+		game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+		if game.sim.rooms.size() > 1: game.sim._enter_room(game.sim.rooms.size() - 1, false)
+		game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]
+		ticks(2)
+		if lvl < 14: game._unhandled_input(_key(KEY_N))
+	check(game.run.finished and not game.best.has("run:medium_demo") and game.run.splits.size() == 15, "a demo run ends after 15 levels")
+	game.demo = false
+	check(game.playable_total() == 60, "the full game has all 60 levels")
 
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()

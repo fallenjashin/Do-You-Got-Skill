@@ -7,7 +7,7 @@ const Sim := preload("res://scripts/sim.gd")
 const SfxScript := preload("res://scripts/sfx.gd")
 const MusicScript := preload("res://scripts/music.gd")
 const TitleScript := preload("res://scripts/title.gd")
-const TITLE_VIEWS := ["title", "main", "leaderboard"]
+const TITLE_VIEWS := ["splash", "title", "main", "leaderboard"]
 const W := 960.0
 const H := 540.0
 const DIFFS := ["easy", "medium", "hard", "master", "god"]
@@ -45,7 +45,12 @@ const C_SHIP := Color("#ff4d6d")
 var data: Dictionary
 var sim: Sim
 var li := 0
-var view := "play"            # "play" | "menu" | "credits" | "stats"
+var view := "play"            # "play" | "menu" | "credits" | "stats" | "demo_end" (+ TITLE_VIEWS)
+## The free web build is a demo: the first DEMO_LEVELS levels are playable, the rest show a lock.
+## The Web export preset has the custom feature "demo"; Steam builds and the editor are the full game.
+const DEMO_LEVELS := 15
+const STEAM_URL := ""         # the store page; set it once the page exists and the demo ending gets a Wishlist button
+var demo := OS.has_feature("demo")
 var diff := "medium"
 var neon_mode := "difficulty" # wall colour follows "difficulty" or "world" (level group)
 var aim := Vector2(W / 2, H / 2)
@@ -110,7 +115,7 @@ func _ready() -> void:
 	title.game = self
 	add_child(title)
 	load_level(last_level)
-	view = "title"
+	view = "splash"   # the creator logo, then the click-to-start title
 	print("GAME READY: %d levels" % data.levels.size())   # the web smoke test waits for this line
 
 
@@ -134,7 +139,7 @@ func _load_save() -> void:
 			var bl = st.get("by_level", {})
 			if bl is Dictionary:
 				for k in bl: stats.by_level[str(k)] = int(bl[k])
-		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, data.levels.size() - 1)
+		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, playable_total() - 1)
 
 
 ## The project used to be called "Recoil", and Godot keeps user:// in a folder named after the
@@ -175,6 +180,8 @@ func fmt_run(ticks: float) -> String:
 func fmt_delta(ticks: float) -> String:
 	return "%s%s" % ["+" if ticks > 0 else "-" if ticks < 0 else "±", fmt_run(absf(ticks))]
 func level_total() -> int: return data.levels.size()
+## Levels you can actually play: all of them, or the demo's first DEMO_LEVELS.
+func playable_total() -> int: return mini(DEMO_LEVELS, level_total()) if demo else level_total()
 
 func par(i: int):
 	var table: Array = data.par.get("master" if diff == "god" else diff, [])
@@ -182,7 +189,7 @@ func par(i: int):
 
 
 func load_level(i: int) -> void:
-	li = posmod(i, level_total())
+	li = posmod(i, playable_total())
 	sim = Sim.new(li, diff)
 	view = "play"
 	rec = []
@@ -225,6 +232,7 @@ func toggle_mute() -> void:
 ## Starting a level from a menu (Play, or a level on the grid) restarts its song from the top.
 ## Retrying after a death or pressing Next does not.
 func start_from_menu(i: int) -> void:
+	if i >= playable_total(): return   # locked in the demo
 	restart_music = true
 	run.on = false
 	if one_life(): start_god()
@@ -243,6 +251,9 @@ func start_run() -> void:
 
 func next_level() -> void:
 	if in_run() and run.finished: return
+	if demo and li >= playable_total() - 1:
+		credits_back = "menu"; view = "demo_end"
+		return
 	load_level(li + 1)
 
 
@@ -290,7 +301,7 @@ func level_code(i: int) -> String:
 
 
 func god_next() -> void:
-	if li == level_total() - 1: god.finished = true
+	if li == playable_total() - 1: god.finished = true
 	else: load_level(li + 1)
 
 
@@ -316,6 +327,7 @@ const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 const MUSIC_BOX := Rect2(228, 26, 130, 30)
 const RUN_BOX := Rect2(790, 26, 150, 30)
+const BTN_WISHLIST := Rect2(W / 2 - 150, 380, 300, 48)
 const CREDITS_BOX := Rect2(846, 508, 94, 24)
 
 func menu_box(i: int) -> Rect2:
@@ -345,13 +357,16 @@ func _unhandled_input(e: InputEvent) -> void:
 				else: load_level(li)
 			KEY_F: start_run()
 			KEY_N:
-				if in_run(): if sim.done: next_level()
-				elif not one_life(): load_level(li + 1)
-				elif sim.done: god_next()
+				if in_run():
+					if sim.done: next_level()
+				elif not one_life():
+					next_level()
+				elif sim.done:
+					god_next()
 			KEY_B: if not one_life() and not in_run(): load_level(li - 1)
 			KEY_L: view = "play" if view == "menu" else "menu"
 			KEY_ESCAPE:
-				if view in ["credits", "stats"]: view = credits_back
+				if view in ["credits", "stats", "demo_end"]: view = credits_back
 				else: open_main_menu()
 			KEY_T: toggle_neon()
 			KEY_V: toggle_mute()
@@ -405,6 +420,10 @@ func _pad_aim() -> void:
 
 
 func press() -> void:
+	if view == "demo_end":
+		if STEAM_URL != "" and hit(BTN_WISHLIST): OS.shell_open(STEAM_URL)
+		else: view = credits_back
+		return
 	if view == "credits" or view == "stats":
 		view = credits_back; return
 	if view == "menu":
@@ -519,12 +538,13 @@ func _physics_process(_delta: float) -> void:
 			god.total += sim.t; god.shots += sim.shots
 			if not best.has(key(li)) or sim.t < best[key(li)]:
 				best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate()
-			if li == level_total() - 1:
+			if li == playable_total() - 1:
 				god.finished = true; stats.runs += 1
-				if not best.has("god:run") or god.total < best["god:run"]:
-					best["god:run"] = god.total; new_best = true
-				if not best.has("god:shots") or god.shots < best["god:shots"]:
-					best["god:shots"] = god.shots; new_fewest = true
+				if not demo:   # the demo's short run is not a record
+					if not best.has("god:run") or god.total < best["god:run"]:
+						best["god:run"] = god.total; new_best = true
+					if not best.has("god:shots") or god.shots < best["god:shots"]:
+						best["god:shots"] = god.shots; new_fewest = true
 		elif not best.has(key(li)) or sim.t < best[key(li)]:
 			best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate(); new_best = true
 		if in_run(): _run_level_won()
@@ -537,8 +557,9 @@ func _run_level_won() -> void:
 	run.splits.append(run.t)
 	var ref = best.get("runs:" + diff, null)
 	run.delta = run.t - int(ref[li]) if ref is Array and ref.size() > li else null
-	if li != level_total() - 1: return
+	if li != playable_total() - 1: return
 	run.finished = true; stats.runs += 1
+	if demo: return   # the demo's short run is not a record
 	var rk := "run:" + diff
 	if not best.has(rk) or run.t < int(best[rk]):
 		best[rk] = run.t; best["runs:" + diff] = run.splits.duplicate(); run.new_best = true
@@ -644,6 +665,8 @@ func _draw() -> void:
 		_draw_credits()
 	elif view == "stats":
 		_draw_stats()
+	elif view == "demo_end":
+		_draw_demo_end()
 
 
 func _draw_world() -> void:
@@ -982,7 +1005,7 @@ func _draw_hud() -> void:
 		if run.delta != null and not run.finished:
 			col = C_GOAL if run.delta <= 0 else C_RED
 			extra = "%s  (%s)" % [extra, fmt_delta(run.delta)]
-		text("FULL RUN  %s   %d/%d   %s" % [clock, li + (1 if sim.done else 0), level_total(), extra], W - 34, 78, 14, col, "r", true)
+		text("FULL RUN  %s   %d/%d   %s" % [clock, li + (1 if sim.done else 0), playable_total(), extra], W - 34, 78, 14, col, "r", true)
 		ty = 24
 	if not sim.started and view == "play":
 		var tip: String = sim.rooms[0].tip
@@ -1023,8 +1046,9 @@ func _draw_done() -> void:
 				"   ·   %d shots" % god.shots + (" (new fewest!)" if new_fewest else "  (fewest %s)" % str(best["god:shots"]))
 			text(line, W / 2, 295, 17, C_SUB)
 			button("Run again (R)", BTN_RETRY); button("Levels (L)", BTN_LEVELS)
+			if demo: text("DEMO COMPLETE · the full game has %d levels" % level_total(), W / 2, 410, 15, C_ORB, "c", true)
 		else:
-			text("%d / %d cleared" % [li + 1, level_total()], W / 2, 250, 40, C_TEXT, "c", true)
+			text("%d / %d cleared" % [li + 1, playable_total()], W / 2, 250, 40, C_TEXT, "c", true)
 			text("run time %s  ·  %d shots  ·  click to continue" % [fmt(god.total), god.shots], W / 2, 290, 17, C_SUB)
 		return
 	if in_run() and run.finished:
@@ -1071,7 +1095,7 @@ func _draw_menu() -> void:
 		"hard": "Yellow orbs work once · faster spikes · tighter grabs",
 		"master": "Spike hitboxes bigger than they look · fastest spikes · no aim line",
 		"god": "Master rules · ONE LIFE for all %d levels · die and restart from 1   (best run %s, fewest shots %s)" % [
-			level_total(), fmt(best["god:run"]) if best.has("god:run") else "—", str(best["god:shots"]) if best.has("god:shots") else "—"],
+			playable_total(), fmt(best["god:run"]) if best.has("god:run") else "—", str(best["god:shots"]) if best.has("god:shots") else "—"],
 	}
 	text(blurbs[diff], W / 2, 140, 13, C_SUB)
 	if one_life():
@@ -1087,6 +1111,13 @@ func _draw_menu() -> void:
 		draw_rect(b, C_PANEL_HI if hit(b) or selected else C_PANEL)
 		if selected: draw_rect(b, C_TEXT, false, 2.0)
 		draw_rect(Rect2(b.position, Vector2(b.size.x, 2)), wc)
+		if i >= playable_total():   # locked in the demo: dimmed, with a padlock
+			draw_rect(b, Color(0.05, 0.06, 0.08, 0.72))
+			var c := b.get_center() + Vector2(0, 2)
+			draw_rect(Rect2(c.x - 8, c.y - 3, 16, 12), C_DIM)
+			draw_arc(Vector2(c.x, c.y - 3), 5.0, PI, TAU, 12, C_DIM, 2.0)
+			text(level_code(i), b.position.x + 5, b.position.y + 15, 10, Color(wc, 0.5), "l", true)
+			continue
 		var nm: String = data.levels[i].name
 		text(level_code(i), b.position.x + 5, b.position.y + 15, 10, wc, "l", true)
 		text(nm, b.get_center().x, b.position.y + 28, 11 if nm.length() <= 11 else 9, C_TEXT, "c", true)
@@ -1100,9 +1131,27 @@ func _draw_menu() -> void:
 			else "par %s" % (str(pr) if pr != null else "—")
 		text(line, b.get_center().x, b.position.y + 42, 10, (C_ORB if mark != "" else C_GOAL) if bt != null else C_DIM)
 	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  time  shots/par  (★ under par)"
+	if demo: legend = "DEMO · first %d of %d levels · the full game unlocks the rest" % [playable_total(), level_total()]
 	text(legend, W / 2, 528, 11, C_DIM)
 	draw_rect(CREDITS_BOX, C_PANEL_HI if hit(CREDITS_BOX) else C_PANEL)
 	text("Credits (C)", CREDITS_BOX.get_center().x, CREDITS_BOX.position.y + 16, 11, C_SUB, "c", true)
+
+
+## End of the demo: what the full game adds.
+func _draw_demo_end() -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.97))
+	text("DEMO COMPLETE", W / 2, 120, 34, C_ORB, "c", true)
+	text("You cleared the first %d levels." % playable_total(), W / 2, 168, 18, C_TEXT, "c", true)
+	var lines := ["The full game adds", "%d levels in 10 worlds" % level_total(), "10 three-screen finals with teleporters",
+		"Lasers, gunships, pushers and gravity flips", "God Mode: one life for the whole run"]
+	for i in lines.size():
+		text(lines[i], W / 2, 224 + i * 28, 15 if i > 0 else 13, C_SUB if i == 0 else C_TEXT, "c", i > 0)
+	if STEAM_URL != "":
+		draw_rect(BTN_WISHLIST, C_PANEL_HI if hit(BTN_WISHLIST) else C_PANEL)
+		text("Wishlist on Steam", BTN_WISHLIST.get_center().x, BTN_WISHLIST.position.y + 30, 18, C_GOAL, "c", true)
+	else:
+		text("Coming to Steam", W / 2, 408, 20, C_GOAL, "c", true)
+	text("click or press Esc to go back to the levels", W / 2, 512, 12, C_DIM)
 
 
 func _cleared_any(i: int) -> bool:
@@ -1135,7 +1184,7 @@ func _draw_stats() -> void:
 	var left := [
 		["Time played", fmt_play(stats.ticks)],
 		["Levels cleared (total clears)", str(clears)],
-		["Unique levels cleared", "%d / %d" % [unique, level_total()]],
+		["Unique levels cleared", "%d / %d" % [unique, playable_total()]],
 		["Average clear time", fmt(float(stats.clear_ticks) / clears) if clears > 0 else "—"],
 		["Full runs finished", str(stats.runs)],
 	]
@@ -1163,7 +1212,7 @@ func _draw_stats() -> void:
 			if best.has(d + ":" + str(lv) + rv): n += 1
 		var bx := 60.0 + i * 176.0
 		text(data.difficulties[d].label, bx, 418, 13, DIFF_COLOR[d], "l", true)
-		text("%d / %d" % [n, level_total()], bx, 440, 16, C_TEXT, "l", true)
+		text("%d / %d" % [n, playable_total()], bx, 440, 16, C_TEXT, "l", true)
 		var rb = best.get("run:" + d, null) if d != "god" else best.get("god:run", null)
 		text("best run " + (fmt_run(rb) if rb != null else "—"), bx, 458, 11, C_DIM, "l")
 	text("Counted from the update that added Career Stats.  Click or press Esc to close.", W / 2, 512, 12, C_DIM)

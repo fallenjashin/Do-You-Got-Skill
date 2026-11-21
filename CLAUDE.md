@@ -80,6 +80,13 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 - **Career stats** (main menu → Career Stats, `game.stats`, saved in save.json): time played (ticks in a
   level, aiming included, not on the clear screen), deaths (and per level), shots ("jumps"), clears and their
   summed time, finished runs. Counted from the day it was added; no back-fill. Saved every 10 s of play.
+- **Creator splash**: the game opens on view `"splash"` (assets/brand/creator_logo.png: fallenjashin logo,
+  rendered from the design canvas with Chakra Petch + Noto Sans JP, both OFL), 3.1 s, any key skips, then the
+  click-to-start title. Drawn in title.gd `_draw_splash`; the smoke test skips it with Space.
+- **Web build is a demo**: the Web export preset has custom feature `demo`, so `game.demo` is true there:
+  only the first `DEMO_LEVELS` (15 = worlds 1-3) are playable, the rest show a padlock, and the end of level 15
+  shows "DEMO COMPLETE". Steam/Windows builds and the editor are the full game. Demo runs aren't saved as
+  records. Set `STEAM_URL` in game.gd once the store page exists (adds a Wishlist button).
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
