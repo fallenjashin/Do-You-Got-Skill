@@ -7,6 +7,7 @@ const Sim := preload("res://scripts/sim.gd")
 const SfxScript := preload("res://scripts/sfx.gd")
 const MusicScript := preload("res://scripts/music.gd")
 const TitleScript := preload("res://scripts/title.gd")
+const Celebrate := preload("res://scripts/celebrate.gd")
 const TITLE_VIEWS := ["splash", "title", "main", "leaderboard"]
 const W := 960.0
 const H := 540.0
@@ -88,6 +89,10 @@ var music: Node  # scripts/music.gd
 var title: Node2D  # scripts/title.gd (start screen + main menu)
 var last_level := 0          # what "Play" continues from
 var credits_back := "menu"   # where closing the credits returns to
+var cel = null                # the level-complete celebration being played (scripts/celebrate.gd)
+## Your place on the level's online leaderboard after a win: 0 = unknown / not ranked.
+## Nothing sets this until Steam leaderboards exist; when they do, set it before start_celebration() runs.
+var leaderboard_rank := 0
 var booting := false         # true while _ready builds the first level, so no level song starts
 var restart_music := false   # set when a level is started from a menu
 var music_volume := 0.7        # 0..1 in 1% steps
@@ -201,6 +206,7 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
+	cel = null
 	if not booting:   # while the game starts up the title song plays, not this level's
 		music.play_for_level(li, one_life(), restart_music)
 	restart_music = false
@@ -361,6 +367,9 @@ func _unhandled_input(e: InputEvent) -> void:
 				elif in_run() and run.finished: start_run()
 				else: load_level(li)
 			KEY_F: start_run()
+			KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5:
+				# Preview the five celebrations (only when running from the editor, never in a shipped build)
+				if OS.is_debug_build(): start_celebration(e.keycode - KEY_F1 + 1)
 			KEY_N:
 				if in_run():
 					if sim.done: next_level()
@@ -491,6 +500,7 @@ func _physics_process(_delta: float) -> void:
 	if not sim.done:
 		stats.ticks += 1
 		if stats.ticks % 600 == 0: _save()   # every 10 s of play, so a closed tab loses little
+	if cel != null: cel.update(1.0 / 60.0)
 	var counting: bool = in_run() and sim.started and not sim.done and not sim.dead and not run.finished
 	var res := sim.tick()
 	if counting: run.t += 1
@@ -553,7 +563,41 @@ func _physics_process(_delta: float) -> void:
 		elif not best.has(key(li)) or sim.t < best[key(li)]:
 			best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate(); new_best = true
 		if in_run(): _run_level_won()
+		start_celebration()
 		_save()
+
+
+## 1 cleared · 2 personal best · 3 beat the bot (under par) · 4 top 10 · 5 first place.
+static func celebration_tier(was_best: bool, was_fewest: bool, shots: int, par_v, rank: int) -> int:
+	if rank == 1: return 5
+	if rank >= 2 and rank <= 10: return 4
+	if par_v != null and shots < int(par_v): return 3
+	if was_best or was_fewest: return 2
+	return 1
+
+
+## Pick the tier for the level just won and start its animation. force_tier (1-5) is for previews and tests.
+func start_celebration(force_tier := 0) -> void:
+	var pr = par(li)
+	var tier := force_tier if force_tier > 0 else celebration_tier(new_best, new_fewest, sim.shots, pr, leaderboard_rank)
+	var head := ""
+	var sub := ""
+	match tier:
+		2:
+			head = "NEW BEST" if new_best and new_fewest else ("NEW BEST TIME" if new_best else "FEWEST SHOTS")
+			sub = "%s  ·  %d shots" % [fmt(sim.t), sim.shots]
+		3:
+			head = "BEAT THE BOT"
+			sub = "%d shots  ·  par %s" % [sim.shots, str(pr) if pr != null else "—"]
+		4:
+			head = "TOP 10"
+			sub = "#%d on the leaderboard" % maxi(leaderboard_rank, 2)
+		5:
+			head = "#1"
+			sub = "NEW RECORD  ·  top of the leaderboard"
+	var goal := Vector2(float(sim.L.goal[0]), float(sim.L.goal[1]))
+	cel = Celebrate.new()
+	cel.start(self, tier, goal, head, sub)
 
 
 ## A level was beaten during a Full Run: record the split, compare with your best run, finish on level 60.
@@ -664,6 +708,8 @@ func _draw() -> void:
 		_draw_cursor()
 	if sim.done and view == "play":
 		_draw_done()
+	if cel != null and view == "play":
+		cel.draw(self)
 	if view == "menu":
 		_draw_menu()
 	elif view == "credits":

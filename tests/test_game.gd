@@ -385,6 +385,31 @@ func _initialize() -> void:
 	game.demo = false
 	check(game.playable_total() == 60, "the full game has all 60 levels")
 
+	# ---- level-complete celebration tiers
+	var T = game.get_script()
+	check(T.celebration_tier(false, false, 5, 4, 0) == 1, "a plain clear is tier 1")
+	check(T.celebration_tier(true, false, 5, 4, 0) == 2 and T.celebration_tier(false, true, 5, 4, 0) == 2, "a new best time or fewest shots is tier 2")
+	check(T.celebration_tier(false, false, 3, 4, 0) == 3 and T.celebration_tier(true, true, 3, 4, 0) == 3, "beating par (the bot) is tier 3, over a personal best")
+	check(T.celebration_tier(true, true, 4, 4, 0) == 2, "matching par is not beating the bot")
+	check(T.celebration_tier(false, false, 3, null, 0) == 1, "no par means no bot to beat")
+	check(T.celebration_tier(true, true, 3, 4, 7) == 4 and T.celebration_tier(false, false, 9, 4, 10) == 4, "a top-10 rank is tier 4, over everything below")
+	check(T.celebration_tier(false, false, 9, 4, 1) == 5, "first place is tier 5")
+	check(T.celebration_tier(false, false, 9, 4, 11) == 1, "rank 11 is not top 10")
+	game.set_diff("medium"); game.demo = false; game.load_level(0)
+	game.aim = Vector2(game.sim.px, 0); game.press()
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(2)
+	check(game.cel != null and game.cel.tier >= 1, "winning a level starts a celebration")
+	game.load_level(0)
+	check(game.cel == null, "starting a level clears the celebration")
+	for tr in [1, 2, 3, 4, 5]:
+		game.start_celebration(tr)
+		check(game.cel.tier == tr, "tier %d celebration starts" % tr)
+		for i in 360: game.cel.update(1.0 / 60.0)
+		check(game.cel.t > 5.9, "tier %d celebration runs for 6 s without errors" % tr)
+	check(game.cel.parts.size() < 900, "the biggest celebration stays under 900 particles")
+	game.load_level(0)
+
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))
 	game.free()
 	quit(1 if failures else 0)

@@ -87,6 +87,10 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   only the first `DEMO_LEVELS` (15 = worlds 1-3) are playable, the rest show a padlock, and the end of level 15
   shows "DEMO COMPLETE". Steam/Windows builds and the editor are the full game. Demo runs aren't saved as
   records. Set `STEAM_URL` in game.gd once the store page exists (adds a Wishlist button).
+- **Level-complete celebrations** (`scripts/celebrate.gd`, purely cosmetic): tier 1 clear, 2 personal best,
+  3 beat the bot (shots < par), 4 top 10, 5 first place. `Game.celebration_tier()` picks it; tiers 4-5 need
+  `game.leaderboard_rank` (1-10 / 1), which nothing sets until Steam leaderboards exist. In the editor (debug
+  build only) F1-F5 preview the five tiers.
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
