@@ -88,6 +88,7 @@ var music: Node  # scripts/music.gd
 var title: Node2D  # scripts/title.gd (start screen + main menu)
 var last_level := 0          # what "Play" continues from
 var credits_back := "menu"   # where closing the credits returns to
+var booting := false         # true while _ready builds the first level, so no level song starts
 var restart_music := false   # set when a level is started from a menu
 var music_volume := 0.7        # 0..1 in 1% steps
 var music_unmuted := 0.7       # volume to come back to after unmuting
@@ -111,11 +112,14 @@ func _ready() -> void:
 	add_child(music)
 	_load_save()
 	music.set_volume(music_volume)
+	booting = true
 	title = TitleScript.new()
 	title.game = self
 	add_child(title)
 	load_level(last_level)
+	booting = false
 	view = "splash"   # the creator logo, then the click-to-start title
+	music.play(music.TITLE)   # one song from the logo through the title and main menu
 	print("GAME READY: %d levels" % data.levels.size())   # the web smoke test waits for this line
 
 
@@ -197,7 +201,8 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
-	music.play_for_level(li, one_life(), restart_music)
+	if not booting:   # while the game starts up the title song plays, not this level's
+		music.play_for_level(li, one_life(), restart_music)
 	restart_music = false
 	if not one_life() and li != last_level:
 		last_level = li

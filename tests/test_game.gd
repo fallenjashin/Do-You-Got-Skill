@@ -36,6 +36,7 @@ func _initialize() -> void:
 	# ---- start screen and main menu
 	var t: Node2D = game.title
 	check(game.view == "splash", "the game opens on the creator splash")
+	check(game.music.current == "00_title_pink_bloom" and game.music.is_playing(), "the title song starts with the creator splash, no level song first")
 	t._unhandled_input(_key(KEY_X))
 	check(game.view == "splash", "the splash ignores a keypress in its first instant")
 	for i in 10: t._process(0.05)    # the splash clock advances at most 0.05 s a frame
