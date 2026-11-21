@@ -59,6 +59,7 @@ func items() -> Array:
 	var list := [
 		{"id": "play", "label": "Play", "value": "%s  %s" % [game.level_code(game.last_level), game.data.levels[game.last_level].name] if game.diff != "god" else "God run", "c": C_CYAN},
 		{"id": "select", "label": "Select Level", "value": "", "c": C_CYAN},
+		{"id": "fullrun", "label": "Full Run", "value": "God run" if game.diff == "god" else (game.fmt_run(game.best["run:" + game.diff]) if game.best.has("run:" + game.diff) else "all 60"), "c": C_CYAN},
 		{"id": "difficulty", "label": "Difficulty", "value": d.label, "opt": true, "c": game.DIFF_COLOR[game.diff]},
 		{"id": "leaderboard", "label": "Leaderboard", "value": "soon", "c": C_VIOLET},
 		{"id": "music", "label": "Music", "value": "muted" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA, "slider": true},
@@ -118,6 +119,8 @@ func activate(i: int, dir := 1) -> void:
 		"select":
 			game.menu_sel = game.li
 			game.view = "menu"
+		"fullrun":
+			game.start_run()
 		"leaderboard":
 			lb_level = game.last_level
 			game.view = "leaderboard"

@@ -71,6 +71,16 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   use new slots (`key()` adds `:3s`), so old one-screen times don't count. Ghosts store
   `x + 2000 * screen`. Check screens with `node tools/bot/rooms.js <diff> 50-59`.
 
+- **Full Run** (Easy..Master; God Mode is its own one-life run): all 60 levels in order on one clock.
+  The clock counts ticks after the first shot of each attempt, deaths included, stopping between
+  levels; menus pause it. Splits are cumulative; best run is `best["run:<diff>"]`, its splits
+  `best["runs:<diff>"]`, shots `best["run:s:<diff>"]`. Start: main menu "Full Run", level-grid button, or F.
+  B (back) is disabled inside a run; picking a level from the grid or changing difficulty leaves it.
+  Pausing is free, so a future Steam leaderboard must verify runs by replay, not trust the clock.
+- `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
+  short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
+  Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
+
 ## Open items / next steps
 
 - **Finals par is empty** ("—"): par.js's budget is too small for 3 screens. On Easy/Medium you

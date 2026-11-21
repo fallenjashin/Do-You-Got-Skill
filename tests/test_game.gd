@@ -42,7 +42,7 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
-	check(ids.slice(0, 7) == ["play", "select", "difficulty", "leaderboard", "music", "neon", "credits"], "menu lists play, levels, difficulty, leaderboard, music, neon, credits")
+	check(ids.slice(0, 8) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, credits")
 	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
@@ -266,6 +266,53 @@ func _initialize() -> void:
 	game.sim.px = float(gl[0]); game.sim.py = float(gl[1]); game.sim.vx = 0.0; game.sim.vy = 0.0
 	ticks(1)
 	check(game.sim.done and game.best.has("hard:%d:3s" % fi), "the green dot on screen 3 finishes; record goes in the 3-screen slot")
+	game.set_diff("medium")
+
+	# ---- Full Run: all 60 levels on one clock
+	game.set_diff("medium")
+	game.start_run()
+	check(game.in_run() and game.li == 0 and game.run.t == 0, "Full Run starts on level 1 with the clock at 0")
+	ticks(30)
+	check(game.run.t == 0, "the run clock waits for your first shot")
+	game.aim = Vector2(game.sim.px, 0); game.press(); ticks(10)
+	check(game.run.t == 10, "the run clock counts ticks once you've fired")
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(1)
+	check(game.sim.done and game.run.splits.size() == 1 and game.run.splits[0] == game.run.t, "beating a level records a split")
+	var clock_done: int = game.run.t
+	ticks(20)
+	check(game.run.t == clock_done, "the clock stops between levels")
+	game._unhandled_input(_key(KEY_B))
+	check(game.li == 0, "B can't skip back during a Full Run")
+	game._unhandled_input(_key(KEY_N))
+	check(game.li == 1 and game.in_run(), "N goes on to level 2 inside the run")
+	game.aim = Vector2(game.sim.px, 0); game.press(); ticks(5)
+	var k2: Array = game.sim.L.k[0]
+	game.sim.px = k2[0] + k2[2] / 2.0; game.sim.py = k2[1] + 4.0; ticks(1)
+	check(game.run.deaths == 1 and game.li == 1 and game.run.t > clock_done, "dying keeps the clock running and counts the death")
+	game._unhandled_input(_key(KEY_F))
+	check(game.li == 0 and game.run.t == 0 and game.run.splits.is_empty() and game.run.deaths == 0, "F restarts the whole run")
+	game.view = "menu"; game.aim = game.menu_box(5).get_center(); game.press()
+	check(not game.in_run() and game.li == 5, "picking a level from the grid leaves the run")
+	# finish a run: win each level in turn
+	game.start_run()
+	for lvl in 60:
+		game.aim = Vector2(game.sim.px, 0); game.press()
+		game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+		if game.sim.rooms.size() > 1: game.sim._enter_room(game.sim.rooms.size() - 1, false)
+		game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]
+		ticks(2)
+		if lvl < 59: game._unhandled_input(_key(KEY_N))
+	check(game.run.finished and game.run.splits.size() == 60 and game.li == 59, "beating level 60 finishes the run with 60 splits")
+	check(game.best.has("run:medium") and game.best["runs:medium"].size() == 60 and game.run.new_best, "the first finished run becomes the best run, with all splits")
+	game.start_run()
+	game.aim = Vector2(game.sim.px, 0); game.press(); ticks(40)
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(1)
+	check(game.run.delta != null and game.run.delta == game.run.t - int(game.best["runs:medium"][0]), "splits compare against your best run")
+	check(game.fmt_run(65.0 * 60.0 + 12.0) == "1:05.20" and game.fmt_run(3725.0 * 60.0) == "1:02:05.00" and game.fmt_run(213.0) == "3.55", "run times format as m:ss.cc / h:mm:ss.cc")
+	game.set_diff("god")
+	check(not game.in_run(), "God Mode is its own category, not a Full Run")
 	game.set_diff("medium")
 
 	print("game test: %s" % ("ALL PASSED" if failures == 0 else "%d FAILED" % failures))

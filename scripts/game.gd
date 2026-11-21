@@ -62,6 +62,10 @@ var new_fewest := false
 var best := {}                # "diff:i" -> ticks, "s:diff:i" -> shots, "god:run", "god:shots"
 var ghosts := {}
 var god := {"total": 0, "shots": 0, "flash": 0, "finished": false}
+## Full Run (Easy..Master): all 60 levels in order on one clock. The clock counts every tick after your
+## first shot of an attempt, deaths included, and stops between levels. Menus pause it.
+## Best time lives in best["run:<diff>"], the best run's cumulative splits in best["runs:<diff>"].
+var run := {"on": false, "t": 0, "shots": 0, "deaths": 0, "splits": [], "finished": false, "new_best": false, "delta": null}
 var menu_sel := 0             # controller selection on the level grid
 var using_pad := false
 var trigger_was_down := false
@@ -146,6 +150,18 @@ func skey(i: int) -> String: return "s:" + diff + ":" + str(i) + _rv(i)
 func _rv(i: int) -> String: return ":3s" if data.levels[i].has("rooms") else ""
 func one_life() -> bool: return data.difficulties[diff].get("oneLife", false)
 func fmt(ticks: float) -> String: return "%.2fs" % (ticks / 60.0)
+func in_run() -> bool: return run.on and not one_life()
+## Long times: 1:02:03.45 / 12:03.45 / 3.45
+func fmt_run(ticks: float) -> String:
+	var cs := int(roundf(ticks * 100.0 / 60.0))
+	var h := cs / 360000
+	var m := (cs / 6000) % 60
+	var sec := (cs / 100) % 60
+	if h > 0: return "%d:%02d:%02d.%02d" % [h, m, sec, cs % 100]
+	if m > 0: return "%d:%02d.%02d" % [m, sec, cs % 100]
+	return "%d.%02d" % [sec, cs % 100]
+func fmt_delta(ticks: float) -> String:
+	return "%s%s" % ["+" if ticks > 0 else "-" if ticks < 0 else "±", fmt_run(absf(ticks))]
 func level_total() -> int: return data.levels.size()
 
 func par(i: int):
@@ -198,8 +214,24 @@ func toggle_mute() -> void:
 ## Retrying after a death or pressing Next does not.
 func start_from_menu(i: int) -> void:
 	restart_music = true
+	run.on = false
 	if one_life(): start_god()
 	else: load_level(i)
+
+
+## Full Run from level 1 (God Mode already is a full run: one life, same idea).
+func start_run() -> void:
+	restart_music = true
+	if one_life():
+		start_god()
+		return
+	run = {"on": true, "t": 0, "shots": 0, "deaths": 0, "splits": [], "finished": false, "new_best": false, "delta": null}
+	load_level(0)
+
+
+func next_level() -> void:
+	if in_run() and run.finished: return
+	load_level(li + 1)
 
 
 ## Back to the level from the main menu (the level's song comes back in).
@@ -222,6 +254,7 @@ func start_god() -> void:
 
 
 func set_diff(dname: String) -> void:
+	if dname != diff: run.on = false
 	diff = dname
 	_save()
 
@@ -270,6 +303,7 @@ const BTN_NEXT := Rect2(W / 2 + 85, 330, 130, 44)
 const HUD_LEVELS := Rect2(20, 18, 92, 30)
 const NEON_BOX := Rect2(20, 26, 200, 30)
 const MUSIC_BOX := Rect2(228, 26, 130, 30)
+const RUN_BOX := Rect2(790, 26, 150, 30)
 const CREDITS_BOX := Rect2(846, 508, 94, 24)
 
 func menu_box(i: int) -> Rect2:
@@ -293,11 +327,16 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventKey and e.pressed and not e.echo:
 		match e.keycode:
 			KEY_SPACE: press()
-			KEY_R: start_god() if one_life() else load_level(li)
+			KEY_R:
+				if one_life(): start_god()
+				elif in_run() and run.finished: start_run()
+				else: load_level(li)
+			KEY_F: start_run()
 			KEY_N:
-				if not one_life(): load_level(li + 1)
+				if in_run(): if sim.done: next_level()
+				elif not one_life(): load_level(li + 1)
 				elif sim.done: god_next()
-			KEY_B: if not one_life(): load_level(li - 1)
+			KEY_B: if not one_life() and not in_run(): load_level(li - 1)
 			KEY_L: view = "play" if view == "menu" else "menu"
 			KEY_ESCAPE:
 				if view == "credits": view = credits_back
@@ -333,7 +372,7 @@ func _pad_button(b: int) -> void:
 				if one_life():
 					if god.finished: start_god()
 					else: god_next()
-				else: load_level(li + 1)
+				else: next_level()
 			else: press()
 		JOY_BUTTON_Y: start_god() if one_life() else load_level(li)
 		JOY_BUTTON_START: menu_sel = li; view = "menu"
@@ -359,6 +398,7 @@ func press() -> void:
 	if view == "menu":
 		if hit(CREDITS_BOX): credits_back = "menu"; view = "credits"; return
 		if hit(NEON_BOX): toggle_neon(); return
+		if hit(RUN_BOX) and not one_life(): start_run(); return
 		if hit(MUSIC_BOX): toggle_mute(); return
 		for i in DIFFS.size():
 			if hit(diff_box(i)): set_diff(DIFFS[i]); return
@@ -378,9 +418,12 @@ func press() -> void:
 				elif hit(BTN_LEVELS): view = "menu"
 			else: god_next()
 			return
-		if hit(BTN_RETRY): load_level(li)
+		if in_run() and run.finished:
+			if hit(BTN_RETRY): start_run()
+			elif hit(BTN_LEVELS): view = "menu"
+		elif hit(BTN_RETRY): load_level(li)
 		elif hit(BTN_LEVELS): view = "menu"
-		elif hit(BTN_NEXT): load_level(li + 1)
+		elif hit(BTN_NEXT): next_level()
 		return
 	var dir := fire_dir()
 	if not sim.fire(dir.x, dir.y):
@@ -408,7 +451,9 @@ func _physics_process(_delta: float) -> void:
 		if death_face.life <= 0: death_face = {}
 	if view != "play":
 		return
+	var counting: bool = in_run() and sim.started and not sim.done and not sim.dead and not run.finished
 	var res := sim.tick()
+	if counting: run.t += 1
 	if sim.started and not sim.done and not sim.dead:
 		rec.append(sim.px + GHOST_ROOM * sim.room); rec.append(sim.py)
 		if ghost != null: gi = mini(gi + 2, ghost.size() - 2)
@@ -438,6 +483,7 @@ func _physics_process(_delta: float) -> void:
 
 	if res == "dead":
 		deaths += 1; sfx.beep(90, 0.25, "sawtooth", 0.07); shake = 10.0
+		if in_run(): run.deaths += 1
 		death_face = {"x": sim.px, "y": sim.py, "g": sim.g, "life": 1.0}
 		burst(sim.px, sim.py, C_SPIKE, 30)
 		if one_life():
@@ -462,7 +508,24 @@ func _physics_process(_delta: float) -> void:
 					best["god:shots"] = god.shots; new_fewest = true
 		elif not best.has(key(li)) or sim.t < best[key(li)]:
 			best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate(); new_best = true
+		if in_run(): _run_level_won()
 		_save()
+
+
+## A level was beaten during a Full Run: record the split, compare with your best run, finish on level 60.
+func _run_level_won() -> void:
+	run.shots += sim.shots
+	run.splits.append(run.t)
+	var ref = best.get("runs:" + diff, null)
+	run.delta = run.t - int(ref[li]) if ref is Array and ref.size() > li else null
+	if li != level_total() - 1: return
+	run.finished = true
+	var rk := "run:" + diff
+	if not best.has(rk) or run.t < int(best[rk]):
+		best[rk] = run.t; best["runs:" + diff] = run.splits.duplicate(); run.new_best = true
+	var sk := "run:s:" + diff
+	if not best.has(sk) or run.shots < int(best[sk]):
+		best[sk] = run.shots
 
 
 func _process(_delta: float) -> void:
@@ -889,14 +952,25 @@ func _draw_hud() -> void:
 			text("GRAVITY ↑", W / 2, 39, 14, C_BLUE, "c", true)
 	if god.flash > 0 and one_life():
 		text("ONE LIFE — back to level 1", W / 2, 150, 26, Color(C_SPIKE, minf(1.0, god.flash / 40.0)), "c", true)
+	var ty := 0
+	if in_run():
+		var clock := fmt_run(run.t)
+		var bt = best.get("run:" + diff, null)
+		var col := Color("#c6cde8")
+		var extra := "best %s" % fmt_run(bt) if bt != null else "first run"
+		if run.delta != null and not run.finished:
+			col = C_GOAL if run.delta <= 0 else C_RED
+			extra = "%s  (%s)" % [extra, fmt_delta(run.delta)]
+		text("FULL RUN  %s   %d/%d   %s" % [clock, li + (1 if sim.done else 0), level_total(), extra], W - 34, 78, 14, col, "r", true)
+		ty = 24
 	if not sim.started and view == "play":
 		var tip: String = sim.rooms[0].tip
 		if li == 0 and using_pad:
 			tip = "Point the stick where you want to fly, then press A. You launch that way."
-		text(tip, W / 2, 80, 15, C_SUB)
+		text(tip, W / 2, 80 + ty, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  R restart  ·  N / B next / back  ·  L levels  ·  Esc menu"
-		text(controls, W / 2, 102, 13, C_DIM)
+			"click / tap / space = fire  ·  R retry  ·  F full run  ·  N / B next / back  ·  L levels  ·  Esc menu"
+		text(controls, W / 2, 102 + ty, 13, C_DIM)
 
 
 ## In-game cursor: a neon arrow pointing straight away from the ball (the way you'll fly).
@@ -932,8 +1006,19 @@ func _draw_done() -> void:
 			text("%d / %d cleared" % [li + 1, level_total()], W / 2, 250, 40, C_TEXT, "c", true)
 			text("run time %s  ·  %d shots  ·  click to continue" % [fmt(god.total), god.shots], W / 2, 290, 17, C_SUB)
 		return
+	if in_run() and run.finished:
+		text("FULL RUN CLEARED · %s" % data.difficulties[diff].label.to_upper(), W / 2, 190, 22, C_ORB, "c", true)
+		text(fmt_run(run.t), W / 2, 258, 54, C_GOAL if run.new_best else C_TEXT, "c", true)
+		var bt = best["run:" + diff]
+		var line := "New best run!" if run.new_best else "Best %s" % fmt_run(bt)
+		text(line + "   ·   %d shots   ·   %d deaths" % [run.shots, run.deaths], W / 2, 295, 17, C_SUB)
+		button("Run again (F)", BTN_RETRY); button("Levels (L)", BTN_LEVELS)
+		return
 	var pr = par(li)
 	var sh := sim.shots
+	if in_run():
+		var d := "" if run.delta == null else "   %s vs best run" % fmt_delta(run.delta)
+		text("run %s%s" % [fmt_run(run.t), d], W / 2, 318, 14, C_GOAL if run.delta != null and run.delta <= 0 else C_SUB, "c", true)
 	text(fmt(sim.t), W / 2 - 110, 235, 44, C_GOAL if new_best else C_TEXT, "c", true)
 	text("%d shot%s" % [sh, "" if sh == 1 else "s"], W / 2 + 110, 235, 44, C_GOAL if new_fewest else C_SHOT, "c", true)
 	text("NEW BEST TIME" if new_best else "best %s" % fmt(best[key(li)]), W / 2 - 110, 262, 13, C_SUB, "c", true)
@@ -950,6 +1035,10 @@ func _draw_menu() -> void:
 	text("Neon: by %s ⇄" % neon_mode, NEON_BOX.get_center().x, NEON_BOX.position.y + 20, 13, neon(), "c", true)
 	draw_rect(MUSIC_BOX, C_PANEL_HI if hit(MUSIC_BOX) else C_PANEL)
 	text("Music: %s" % ("muted" if music_volume <= 0.0 else "%d%%" % roundi(music_volume * 100)), MUSIC_BOX.get_center().x, MUSIC_BOX.position.y + 20, 13, C_TEXT, "c", true)
+	if not one_life():
+		draw_rect(RUN_BOX, C_PANEL_HI if hit(RUN_BOX) else C_PANEL)
+		var rb = best.get("run:" + diff, null)
+		text("Full run (F)  %s" % (fmt_run(rb) if rb != null else "—"), RUN_BOX.get_center().x, RUN_BOX.position.y + 20, 13, C_ORB, "c", true)
 	for i in DIFFS.size():
 		var b := diff_box(i)
 		var on: bool = DIFFS[i] == diff
