@@ -19,8 +19,8 @@ const C_SUB := Color("#8b93b5")
 const C_DIM := Color("#5d6585")
 const C_SHOT := Color("#ffb347")
 const MENU_X := 600.0
-const MENU_Y := 118.0
-const ROW := 36.0
+const MENU_Y := 100.0
+const ROW := 33.0
 const SPLASH_TIME := 3.1   # seconds before the creator splash hands over to the title screen
 const LOGO := preload("res://assets/brand/creator_logo.png")
 

@@ -54,7 +54,7 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
-	check(ids.slice(0, 10) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "stats", "settings", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, stats, settings, credits")
+	check(ids.slice(0, 11) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "stats", "settings", "feedback", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, stats, settings, feedback, credits")
 	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")

@@ -103,7 +103,7 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   brake (fire against your motion), bounce (a wall/floor bounce). Detected from velocity only, never touches the sim.
   Settings → "Replay coaching tips" clears them. Level 1 and 4 tips (build_levels.py) also teach arc and chaining.
 - **Pause menu** (Esc during play, view `"pause"`): Resume, Retry, Practice, Settings, Main menu (+ Send feedback when
-  `FEEDBACK_URL` in game.gd is set; empty now, set it to a Discord/form link). Menus freeze the sim, so Full Run time pauses.
+  `FEEDBACK_URL` in game.gd is set; it is the owner's Google Form). Menus freeze the sim, so Full Run time pauses.
 - **Practice mode** (`practice`, only outside Full Run/God): infinite shots, no records, no career stats, no stars.
 - **Stars** (`best["st:"+key]`, shown on the level grid and clear screen): 1 cleared, 2 flawless (no deaths since you
   started the level; `flawless`/`star_li`), 3 flawless AND shots <= your previous fewest (needs an earlier record).
