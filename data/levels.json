@@ -98,7 +98,7 @@
  "levels": [
   {
    "name": "Hop",
-   "tip": "Point where you want to fly, then click. You launch that way.",
+   "tip": "Point where you want to fly, then click. Gravity bends the path, so aim a little high.",
    "start": [
     80,
     490
@@ -230,7 +230,7 @@
   },
   {
    "name": "Climb",
-   "tip": "Chain shots and orbs to go up and over.",
+   "tip": "Chain shots: firing mid-air keeps 45% of your speed. Fire the same way twice to go farther.",
    "start": [
     70,
     490

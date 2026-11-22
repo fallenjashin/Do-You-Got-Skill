@@ -93,6 +93,17 @@ var hc_hazards := false     # accessibility: hazards get a white outline so they
 var keys := {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
 const KEY_ROWS := [["fire", "Fire"], ["retry", "Retry"], ["next", "Next level"], ["back", "Previous level"], ["levels", "Level select"], ["run", "Full Run"]]
 var set_sel := 0
+# One-time coaching tips: shown the first time the situation happens, remembered in the save.
+const HINTS := {
+	"arc": "Gravity bends your path, so you won't land where you aimed. Aim a little higher.",
+	"chain": "CHAIN: firing mid-air keeps 45% of your speed and adds a new push. Fire the same way twice to go farther.",
+	"brake": "BRAKE: aiming against your motion cuts your speed fast. Use it to stop over a target.",
+	"bounce": "Walls and floors give a small bounce (a quarter of your speed). Skim a wall to turn without spending a shot.",
+}
+var hints_seen := {}
+var toast := {}             # {"text", "t"} while a tip is on screen
+var arc_timer := 0
+var hint_queue: Array = []   # tips waiting for the current one to fade
 var listening := ""         # the key action waiting for a keypress in Settings ("" = none)
 var set_note := ""
 var credits_back := "menu"   # where closing the credits returns to
@@ -151,6 +162,10 @@ func _load_save() -> void:
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
 		reduce_flash = bool(parsed.get("reduce_flash", false))
 		hc_hazards = bool(parsed.get("hc_hazards", false))
+		var hs = parsed.get("hints", null)
+		if hs is Dictionary:
+			for k in hs:
+				if HINTS.has(str(k)): hints_seen[str(k)] = true
 		var ks = parsed.get("keys", null)
 		if ks is Dictionary:
 			for k in keys:
@@ -179,7 +194,7 @@ func _migrate_old_save() -> void:
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats, "reduce_flash": reduce_flash, "hc_hazards": hc_hazards, "keys": keys}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats, "reduce_flash": reduce_flash, "hc_hazards": hc_hazards, "keys": keys, "hints": hints_seen}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -217,6 +232,9 @@ func load_level(i: int) -> void:
 	new_fewest = false
 	beat_both = false
 	cel = null
+	toast = {}
+	hint_queue = []
+	arc_timer = 0
 	if not booting:   # while the game starts up the title song plays, not this level's
 		music.play_for_level(li, one_life(), restart_music)
 	restart_music = false
@@ -492,8 +510,15 @@ func press() -> void:
 		elif hit(BTN_NEXT): next_level()
 		return
 	var dir := fire_dir()
+	var was_air: bool = not sim.grounded and sim.rope == null
+	var vel := Vector2(sim.vx, sim.vy)
 	if not sim.fire(dir.x, dir.y):
 		sfx.beep(120, 0.05, "square", 0.03); return
+	if was_air and vel.length() > 3.5:   # coaching: how momentum carries between shots
+		var along := (-dir).normalized().dot(vel.normalized())
+		if along > 0.5: _coach("chain")
+		elif along < -0.4: _coach("brake")
+	if li == 0 and sim.shots == 1: arc_timer = 45
 	stats.shots += 1
 	shake = 5.0
 	sfx.beep(180 + randf() * 40, 0.09, "sawtooth", 0.06)
@@ -523,7 +548,19 @@ func _physics_process(_delta: float) -> void:
 		if stats.ticks % 600 == 0: _save()   # every 10 s of play, so a closed tab loses little
 	if cel != null: cel.update(1.0 / 60.0)
 	var counting: bool = in_run() and sim.started and not sim.done and not sim.dead and not run.finished
+	var pv := Vector2(sim.vx, sim.vy)
 	var res := sim.tick()
+	if not toast.is_empty(): toast.t += 1.0 / 60.0
+	if not toast.is_empty() and toast.t > 5.5:
+		toast = {}
+		if not hint_queue.is_empty(): _coach(hint_queue.pop_front())
+	if arc_timer > 0 and not sim.done:
+		arc_timer -= 1
+		if arc_timer == 0: _coach("arc")
+	if not sim.done and not sim.dead and res == "" and sim.rope == null:
+		var nv := Vector2(sim.vx, sim.vy)
+		if (absf(pv.x) > 4.0 and signf(nv.x) != signf(pv.x)) or (absf(pv.y) > 4.0 and signf(nv.y) != signf(pv.y)):
+			_coach("bounce")
 	if counting: run.t += 1
 	if sim.started and not sim.done and not sim.dead:
 		rec.append(sim.px + GHOST_ROOM * sim.room); rec.append(sim.py)
@@ -727,6 +764,7 @@ func _draw() -> void:
 	_draw_hud()
 	ui_alpha = 1.0
 	if view == "play" and not sim.done:
+		_draw_toast()
 		_draw_cursor()
 	if sim.done and view == "play":
 		_draw_done()
@@ -778,6 +816,26 @@ func _draw_dust(nc: Color, alt: Color, now: float) -> void:
 		var pos := Vector2(fposmod(q * 37.1, W), fposmod(q * 53.9, H))
 		var tw := 0.5 + 0.5 * sin(now * (0.9 + fposmod(q, 1.7)) + q)
 		draw_circle(pos, 1.5 + 1.5 * tw, Color(alt if i % 3 == 0 else nc, 0.1 + 0.5 * tw * tw))
+
+
+func _coach(id: String) -> void:
+	if hints_seen.has(id): return
+	if not toast.is_empty():
+		if id not in hint_queue: hint_queue.append(id)
+		return
+	hints_seen[id] = true
+	toast = {"text": HINTS[id], "t": 0.0}
+	_save()
+
+
+func _draw_toast() -> void:
+	if toast.is_empty(): return
+	var t: float = toast.t
+	var a := clampf(minf(t / 0.3, (5.5 - t) / 0.5), 0.0, 1.0)
+	var r := Rect2(W / 2 - 400, 150, 800, 34)
+	draw_rect(r, Color(0.08, 0.1, 0.16, 0.88 * a))
+	draw_rect(r, Color(neon(), 0.7 * a), false, 1.5)
+	text(toast.text, W / 2, r.position.y + 22, 14, Color(1, 1, 1, a), "c", true)
 
 
 func _spike(poly: PackedVector2Array) -> void:
@@ -1339,10 +1397,10 @@ func _draw_stats() -> void:
 ## Required attributions: music (CC BY 4.0), engine (MIT), symbol font (Bitstream Vera).
 # ---------------------------------------------------------------- settings (accessibility + controls)
 
-const SET_ROWS := ["flash", "contrast", "key:fire", "key:retry", "key:next", "key:back", "key:levels", "key:run", "reset", "back"]
+const SET_ROWS := ["flash", "contrast", "hints", "key:fire", "key:retry", "key:next", "key:back", "key:levels", "key:run", "reset", "back"]
 
 func set_row_rect(i: int) -> Rect2:
-	return Rect2(210, 100 + i * 34 + (18 if i >= 2 else 0) + (14 if i >= 8 else 0), 540, 28)
+	return Rect2(210, 100 + i * 34 + (18 if i >= 3 else 0) + (14 if i >= 9 else 0), 540, 28)
 
 
 func _key_name(code: int) -> String:
@@ -1354,6 +1412,7 @@ func _settings_activate(i: int) -> void:
 	set_note = ""
 	if id == "flash": reduce_flash = not reduce_flash; shake = 0.0
 	elif id == "contrast": hc_hazards = not hc_hazards
+	elif id == "hints": hints_seen = {}; toast = {}; hint_queue = []
 	elif id.begins_with("key:"): listening = id.substr(4); set_note = "Press a key for \"%s\"  (Esc cancels)" % listening
 	elif id == "reset":
 		keys = {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
@@ -1395,7 +1454,7 @@ func _draw_settings() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.97))
 	text("SETTINGS", W / 2, 66, 28, C_TEXT, "c", true)
 	text("ACCESSIBILITY", 210, 94, 11, C_DIM, "l")
-	text("CONTROLS  (click a row, then press the new key)", 210, 100 + 34 * 2 + 18 - 6, 11, C_DIM, "l")
+	text("CONTROLS  (click a row, then press the new key)", 210, 100 + 34 * 3 + 18 - 6, 11, C_DIM, "l")
 	for i in SET_ROWS.size():
 		var id: String = SET_ROWS[i]
 		var r := set_row_rect(i)
@@ -1408,6 +1467,8 @@ func _draw_settings() -> void:
 			label = "Reduce flashing & shake"; value = "ON" if reduce_flash else "off"; vcol = C_GOAL if reduce_flash else C_DIM
 		elif id == "contrast":
 			label = "High-contrast hazards"; value = "ON" if hc_hazards else "off"; vcol = C_GOAL if hc_hazards else C_DIM
+		elif id == "hints":
+			label = "Replay coaching tips"; value = "%d / %d seen" % [hints_seen.size(), HINTS.size()]
 		elif id.begins_with("key:"):
 			var k := id.substr(4)
 			for row in KEY_ROWS:
@@ -1418,8 +1479,8 @@ func _draw_settings() -> void:
 		else: label = "Back"
 		text(label, r.position.x + 14, r.position.y + 19, 14, C_TEXT, "l", true)
 		if value != "": text(value, r.end.x - 14, r.position.y + 19, 14, vcol, "r", true)
-	if set_note != "": text(set_note, W / 2, 504, 13, C_ORB, "c", true)
-	else: text("Up / Down + Enter, or click.   T neon · V mute · C credits · Esc are fixed keys.", W / 2, 504, 11, C_DIM, "c")
+	if set_note != "": text(set_note, W / 2, 522, 13, C_ORB, "c", true)
+	else: text("Up / Down + Enter, or click.   T neon · V mute · C credits · Esc are fixed keys.", W / 2, 522, 11, C_DIM, "c")
 
 
 func _draw_credits() -> void:

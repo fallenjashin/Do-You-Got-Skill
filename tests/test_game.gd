@@ -392,13 +392,13 @@ func _initialize() -> void:
 	check(game.reduce_flash, "Settings: Enter toggles reduce flashing on")
 	game.set_sel = 1; game._unhandled_input(_key(KEY_ENTER))
 	check(game.hc_hazards, "Settings: Enter toggles high-contrast hazards on")
-	game.set_sel = 2; game._unhandled_input(_key(KEY_ENTER))
+	game.set_sel = 3; game._unhandled_input(_key(KEY_ENTER))
 	check(game.listening == "fire", "Settings: choosing the fire row starts listening")
 	game._unhandled_input(_key(KEY_T))
 	check(game.listening == "fire" and int(game.keys.fire) == KEY_SPACE, "Settings: reserved keys (T) are refused")
 	game._unhandled_input(_key(KEY_X))
 	check(game.listening == "" and int(game.keys.fire) == KEY_X, "Settings: fire is rebound to X")
-	game.set_sel = 3; game._unhandled_input(_key(KEY_ENTER)); game._unhandled_input(_key(KEY_X))
+	game.set_sel = 4; game._unhandled_input(_key(KEY_ENTER)); game._unhandled_input(_key(KEY_X))
 	check(int(game.keys.retry) == KEY_X and int(game.keys.fire) == KEY_R, "Settings: taking a used key swaps the two actions")
 	game._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "play", "Settings: Esc returns where it came from")
@@ -406,9 +406,28 @@ func _initialize() -> void:
 	game.aim = Vector2(game.sim.px + 100, game.sim.py - 100)
 	game._unhandled_input(_key(KEY_R))
 	check(game.sim.shots == shots_before + 1, "the rebound fire key (R) fires")
-	game.view = "settings"; game.set_sel = 8; game._unhandled_input(_key(KEY_ENTER)); game.view = "play"
+	game.view = "settings"; game.set_sel = 9; game._unhandled_input(_key(KEY_ENTER)); game.view = "play"
 	check(int(game.keys.fire) == KEY_SPACE and int(game.keys.retry) == KEY_R, "Settings: reset restores the default keys")
 	game.reduce_flash = false; game.hc_hazards = false
+
+	# ---- coaching tips
+	game.hints_seen = {}; game.toast = {}; game.set_diff("medium"); game.load_level(0); game.view = "play"
+	game.aim = Vector2(game.sim.px + 200, game.sim.py - 120); game.press()
+	ticks(50)
+	check(game.hints_seen.has("arc") or game.hint_queue.has("arc"), "first shot on level 1 queues or shows the gravity tip")
+	ticks(900)
+	check(game.hints_seen.has("arc") and game.toast.is_empty(), "queued tips show in turn, then fade away by themselves")
+	game.load_level(1); game.hints_seen = {}
+	game.sim.px = 300.0; game.sim.py = 200.0; game.sim.vx = 6.0; game.sim.vy = 0.0; game.sim.grounded = false; game.sim.started = true; game.sim.ammo = 2
+	game.aim = Vector2(game.sim.px + 100, game.sim.py)
+	game.press()
+	check(game.hints_seen.has("chain"), "firing the same way mid-air shows the chain tip")
+	game.toast = {}
+	game.sim.vx = 6.0; game.sim.ammo = 2
+	game.aim = Vector2(game.sim.px - 100, game.sim.py)
+	game.press()
+	check(game.hints_seen.has("brake"), "firing against your motion shows the brake tip")
+	game.hints_seen = {}; game.toast = {}; game.load_level(0)
 
 	# ---- level-complete celebration tiers
 	var T = game.get_script()

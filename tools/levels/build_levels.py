@@ -31,11 +31,11 @@ CEIL = lambda x0, x1: [x0, 20, x1 - x0, 22]          # spike strip on the ceilin
 L = lambda name, tip, start, goal, ammo=2, **kw: dict(name=name, tip=tip, start=start, goal=goal, ammo=ammo, **kw)
 
 W1 = [  # ---------------------------------------------------------------- recoil basics
-    L("Hop", "Point where you want to fly, then click. You launch that way.", [80, 490], [880, 490],
+    L("Hop", "Point where you want to fly, then click. Gravity bends the path, so aim a little high.", [80, 490], [880, 490],
       s=[[440, 300, 40, 220]], k=[FLOOR(520, 760)]),
     L("Gap", "Shots refill when you land. Yellow orbs refill you mid-air.", [80, 490], [885, 490],
       k=[FLOOR(200, 800), [470, 20, 30, 150]], o=[[360, 320], [620, 320]]),
-    L("Climb", "Chain shots and orbs to go up and over.", [70, 490], [880, 490],
+    L("Climb", "Chain shots: firing mid-air keeps 45% of your speed. Fire the same way twice to go farther.", [70, 490], [880, 490],
       s=[[300, 180, 24, 340]], k=[FLOOR(324, 800), [560, 20, 30, 210]], o=[[170, 350], [210, 220], [700, 300]]),
     L("Corridor", "Spikes above, below, and in the middle. Short, controlled bursts.", [80, 490], [880, 490],
       s=[[440, 230, 80, 100]], k=[FLOOR(180, 800), CEIL(180, 800), [440, 220, 80, 10], [300, 42, 20, 130], [700, 330, 40, 40]],

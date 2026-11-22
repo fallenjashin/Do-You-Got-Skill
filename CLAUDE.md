@@ -98,6 +98,10 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   (`hc_hazards`: white outline on spikes, brighter idle lasers), and key rebinding (`keys` dict: fire, retry, next,
   back, levels, run; reserved keys Esc/Enter/arrows/T/V/C/F1-F5; picking a used key swaps the two). Any new
   full-screen flash or shake must respect `reduce_flash`. World 1 is named "Fire Blast" (was "Recoil").
+- **Coaching tips** (`HINTS`, `_coach()`, `_draw_toast()` in game.gd, saved as `hints` in save.json): one-time on-screen
+  tips the first time a situation happens: gravity arc (first shot on level 1), chain (fire the same way mid-air),
+  brake (fire against your motion), bounce (a wall/floor bounce). Detected from velocity only, never touches the sim.
+  Settings → "Replay coaching tips" clears them. Level 1 and 4 tips (build_levels.py) also teach arc and chaining.
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
