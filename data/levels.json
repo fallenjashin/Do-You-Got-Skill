@@ -124,7 +124,7 @@
      20
     ]
    ],
-   "world": "Recoil"
+   "world": "Fire Blast"
   },
   {
    "name": "Gap",
@@ -162,7 +162,7 @@
      320
     ]
    ],
-   "world": "Recoil"
+   "world": "Fire Blast"
   },
   {
    "name": "Corridor",
@@ -226,7 +226,7 @@
      330
     ]
    ],
-   "world": "Recoil"
+   "world": "Fire Blast"
   },
   {
    "name": "Climb",
@@ -276,7 +276,7 @@
      300
     ]
    ],
-   "world": "Recoil"
+   "world": "Fire Blast"
   },
   {
    "name": "Gauntlet",
@@ -352,7 +352,7 @@
      190
     ]
    ],
-   "world": "Recoil"
+   "world": "Fire Blast"
   },
   {
    "name": "Swing",
@@ -5540,7 +5540,7 @@
   }
  ],
  "worlds": [
-  "Recoil",
+  "Fire Blast",
   "Swing",
   "Phase",
   "Teleport",

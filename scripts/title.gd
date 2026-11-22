@@ -70,6 +70,7 @@ func items() -> Array:
 		{"id": "music", "label": "Music", "value": "muted" if game.music_volume <= 0.0 else "%d%%" % roundi(game.music_volume * 100), "opt": true, "c": C_MAGENTA, "slider": true},
 		{"id": "neon", "label": "Neon", "value": "by " + game.neon_mode, "opt": true, "c": C_MAGENTA},
 		{"id": "stats", "label": "Career Stats", "value": "", "c": C_VIOLET},
+		{"id": "settings", "label": "Settings", "value": "", "c": C_VIOLET},
 		{"id": "credits", "label": "Credits", "value": "", "c": C_VIOLET},
 	]
 	if not OS.has_feature("web"):
@@ -133,6 +134,10 @@ func activate(i: int, dir := 1) -> void:
 		"stats":
 			game.credits_back = "main"
 			game.view = "stats"
+		"settings":
+			game.credits_back = "main"
+			game.set_sel = 0; game.listening = ""; game.set_note = ""
+			game.view = "settings"
 		"credits":
 			game.credits_back = "main"
 			game.view = "credits"
@@ -354,11 +359,12 @@ func _draw_splash() -> void:
 	draw_circle(Vector2(90, 40), 330.0, Color(1.0, 0.16, 0.43, 0.035))
 	draw_circle(Vector2(880, 500), 330.0, Color(0.0, 0.94, 1.0, 0.03))
 	var a := clampf((t - 0.35) / 0.5, 0.0, 1.0)
-	if t < 1.15:
+	if t < 1.15 and not game.reduce_flash:
 		a *= 0.55 + (0.45 if _rand(floorf(t * 30.0)) >= 0.5 else 0.0)   # flicker on
 	a *= 1.0 - clampf((t - 2.5) / 0.6, 0.0, 1.0)                # fade out
 	var g := clampf(1.0 - (t - 0.35) / 0.8, 0.0, 1.0) if t > 0.35 else 0.0
-	if t > 1.85 and t < 1.97: g = maxf(g, 0.45)                 # one more glitch while it holds
+	if t > 1.85 and t < 1.97: g = maxf(g, 0.45)
+	if game.reduce_flash: g = 0.0                 # one more glitch while it holds
 	var w := 560.0
 	var h := w * LOGO.get_height() / LOGO.get_width()
 	var r := Rect2(W / 2 - w / 2, 262.0 - h / 2, w, h)

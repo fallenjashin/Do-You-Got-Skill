@@ -54,7 +54,7 @@ func _initialize() -> void:
 	check(t.trans == 1.0 and t.pop > 0.0, "the sign finishes sliding and the ball appears")
 	check(game.music.current == "00_title_pink_bloom", "Pink Bloom plays on the start screen and menu")
 	var ids: Array = t.items().map(func(it): return it.id)
-	check(ids.slice(0, 9) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "stats", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, stats, credits")
+	check(ids.slice(0, 10) == ["play", "select", "fullrun", "difficulty", "leaderboard", "music", "neon", "stats", "settings", "credits"], "menu lists play, levels, full run, difficulty, leaderboard, music, neon, stats, settings, credits")
 	var beeps_before: int = game.sfx._next
 	t._unhandled_input(_key(KEY_DOWN))
 	check(t.sel == 1 and t.hop < 1.0, "down arrow moves the ball to the next item")
@@ -384,6 +384,31 @@ func _initialize() -> void:
 	check(game.run.finished and not game.best.has("run:medium_demo") and game.run.splits.size() == 15, "a demo run ends after 15 levels")
 	game.demo = false
 	check(game.playable_total() == 60, "the full game has all 60 levels")
+
+	# ---- settings: accessibility toggles and key rebinding
+	game.set_diff("medium"); game.load_level(0); game.view = "play"
+	game.credits_back = "play"; game.view = "settings"; game.set_sel = 0
+	game._unhandled_input(_key(KEY_ENTER))
+	check(game.reduce_flash, "Settings: Enter toggles reduce flashing on")
+	game.set_sel = 1; game._unhandled_input(_key(KEY_ENTER))
+	check(game.hc_hazards, "Settings: Enter toggles high-contrast hazards on")
+	game.set_sel = 2; game._unhandled_input(_key(KEY_ENTER))
+	check(game.listening == "fire", "Settings: choosing the fire row starts listening")
+	game._unhandled_input(_key(KEY_T))
+	check(game.listening == "fire" and int(game.keys.fire) == KEY_SPACE, "Settings: reserved keys (T) are refused")
+	game._unhandled_input(_key(KEY_X))
+	check(game.listening == "" and int(game.keys.fire) == KEY_X, "Settings: fire is rebound to X")
+	game.set_sel = 3; game._unhandled_input(_key(KEY_ENTER)); game._unhandled_input(_key(KEY_X))
+	check(int(game.keys.retry) == KEY_X and int(game.keys.fire) == KEY_R, "Settings: taking a used key swaps the two actions")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "play", "Settings: Esc returns where it came from")
+	var shots_before: int = game.sim.shots
+	game.aim = Vector2(game.sim.px + 100, game.sim.py - 100)
+	game._unhandled_input(_key(KEY_R))
+	check(game.sim.shots == shots_before + 1, "the rebound fire key (R) fires")
+	game.view = "settings"; game.set_sel = 8; game._unhandled_input(_key(KEY_ENTER)); game.view = "play"
+	check(int(game.keys.fire) == KEY_SPACE and int(game.keys.retry) == KEY_R, "Settings: reset restores the default keys")
+	game.reduce_flash = false; game.hc_hazards = false
 
 	# ---- level-complete celebration tiers
 	var T = game.get_script()

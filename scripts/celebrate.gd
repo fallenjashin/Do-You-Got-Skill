@@ -214,7 +214,7 @@ func draw(c: CanvasItem) -> void:
 				var d := Vector2(cos(q.rot), sin(q.rot))
 				var n := Vector2(-d.y, d.x)
 				c.draw_colored_polygon(PackedVector2Array([q.p + d * h - n * w, q.p + d * h + n * w, q.p - d * h + n * w, q.p - d * h - n * w]), Color(q.c, minf(1.0, a * 1.4)))
-	if flash > 0.01:
+	if flash > 0.01 and not game.reduce_flash:
 		c.draw_rect(Rect2(0, 0, W, H), Color(1, 1, 1, flash * 0.55))
 	if tier >= 2 and t > 0.2:
 		_draw_banner(c)

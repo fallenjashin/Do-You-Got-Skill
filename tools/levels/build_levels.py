@@ -349,7 +349,7 @@ for _name, _order in ORDER.items():
     _lst[:] = [_by[n] for n in _order]
 
 WORLDS = [W1, W2, W3, W4, W5, W6, W7, W8, W9, W10]
-WORLD_NAMES = ["Recoil", "Swing", "Phase", "Teleport", "Gravity", "Moving Spikes", "Elevators", "Pushers", "Lasers", "Gunships", "Finals"]
+WORLD_NAMES = ["Fire Blast", "Swing", "Phase", "Teleport", "Gravity", "Moving Spikes", "Elevators", "Pushers", "Lasers", "Gunships", "Finals"]
 
 
 def build():

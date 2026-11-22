@@ -6,7 +6,7 @@ extends Node
 
 const DIR := "res://assets/music/"
 const WORLD_TRACKS := [
-	"01_underbeat",               # 1 Recoil
+	"01_underbeat",               # 1 Fire Blast
 	"02_behind_the_darkness",     # 2 Swing
 	"09_ghost_steps",             # 3 Phase (walking through walls)
 	"10_space_echoes",            # 4 Teleport

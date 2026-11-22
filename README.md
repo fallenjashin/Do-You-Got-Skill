@@ -63,7 +63,7 @@ Rule of thumb on screen: anything **filled** moves; outlined neon is a static wa
 
 | # | World | | # | World |
 |---|---|---|---|---|
-| 1 | Recoil (basics, yellow orbs) | | 6 | Moving spikes |
+| 1 | Fire Blast (basics, yellow orbs) | | 6 | Moving spikes |
 | 2 | Swing | | 7 | Elevators |
 | 3 | Phase | | 8 | Pushers |
 | 4 | Teleport | | 9 | Lasers |

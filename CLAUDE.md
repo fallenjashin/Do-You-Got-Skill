@@ -93,6 +93,11 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   `game.leaderboard_rank` (1-10 / 1), which nothing sets until Steam leaderboards exist. In the editor (debug
   build only) F1-F5 preview the five tiers.
 - **Animated backdrop** (`_draw_backdrop` in game.gd, cosmetic, uses wall-clock time): drifting glow orbs, a slow light sweep and twinkling dust in the level's neon colour, drawn behind the grid.
+- **Settings** (main menu → Settings, view `"settings"` in game.gd, saved in save.json): *Reduce flashing & shake*
+  (`reduce_flash`: no celebration flash, no screen shake, no backdrop sweep, calm splash), *High-contrast hazards*
+  (`hc_hazards`: white outline on spikes, brighter idle lasers), and key rebinding (`keys` dict: fire, retry, next,
+  back, levels, run; reserved keys Esc/Enter/arrows/T/V/C/F1-F5; picking a used key swaps the two). Any new
+  full-screen flash or shake must respect `reduce_flash`. World 1 is named "Fire Blast" (was "Recoil").
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.

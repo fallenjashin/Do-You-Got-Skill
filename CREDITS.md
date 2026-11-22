@@ -15,7 +15,7 @@ These are the attributions required to ship the game. They also appear in-game
 
 | Track | Plays in |
 |---|---|
-| 01 Underbeat | World 1, Recoil |
+| 01 Underbeat | World 1, Fire Blast |
 | 02 Behind the Darkness | World 2, Swing |
 | 03 Synthetic Whisper | World 7, Elevators |
 | 04 Secret Dissonance | World 6, Moving Spikes |

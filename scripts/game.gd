@@ -46,7 +46,7 @@ const C_SHIP := Color("#ff4d6d")
 var data: Dictionary
 var sim: Sim
 var li := 0
-var view := "play"            # "play" | "menu" | "credits" | "stats" | "demo_end" (+ TITLE_VIEWS)
+var view := "play"            # "play" | "menu" | "credits" | "stats" | "settings" | "demo_end" (+ TITLE_VIEWS)
 ## The free web build is a demo: the first DEMO_LEVELS levels are playable, the rest show a lock.
 ## The Web export preset has the custom feature "demo"; Steam builds and the editor are the full game.
 const DEMO_LEVELS := 15
@@ -88,6 +88,13 @@ var font_sign: Font   # the neon logo
 var music: Node  # scripts/music.gd
 var title: Node2D  # scripts/title.gd (start screen + main menu)
 var last_level := 0          # what "Play" continues from
+var reduce_flash := false   # accessibility: no full-screen flashes, no screen shake, calmer backdrop and splash
+var hc_hazards := false     # accessibility: hazards get a white outline so they don't rely on red alone
+var keys := {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
+const KEY_ROWS := [["fire", "Fire"], ["retry", "Retry"], ["next", "Next level"], ["back", "Previous level"], ["levels", "Level select"], ["run", "Full Run"]]
+var set_sel := 0
+var listening := ""         # the key action waiting for a keypress in Settings ("" = none)
+var set_note := ""
 var credits_back := "menu"   # where closing the credits returns to
 var cel = null                # the level-complete celebration being played (scripts/celebrate.gd)
 ## Your place on the level's online leaderboard after a win: 0 = unknown / not ranked.
@@ -142,6 +149,12 @@ func _load_save() -> void:
 		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
 		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
+		reduce_flash = bool(parsed.get("reduce_flash", false))
+		hc_hazards = bool(parsed.get("hc_hazards", false))
+		var ks = parsed.get("keys", null)
+		if ks is Dictionary:
+			for k in keys:
+				if ks.has(k) and int(ks[k]) > 0: keys[k] = int(ks[k])
 		var st = parsed.get("stats", null)
 		if st is Dictionary:
 			for k in ["ticks", "deaths", "shots", "clears", "clear_ticks", "runs"]:
@@ -166,7 +179,7 @@ func _migrate_old_save() -> void:
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats, "reduce_flash": reduce_flash, "hc_hazards": hc_hazards, "keys": keys}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -357,41 +370,50 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventScreenTouch and e.pressed:
 		aim = e.position; using_pad = false; press()
 	elif e is InputEventKey and e.pressed and not e.echo:
-		match e.keycode:
-			KEY_SPACE: press()
-			KEY_R:
-				if one_life(): start_god()
-				elif in_run() and run.finished: start_run()
-				else: load_level(li)
-			KEY_F: start_run()
-			KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5:
-				# Preview the five celebrations (only when running from the editor, never in a shipped build)
-				if OS.is_debug_build(): start_celebration(e.keycode - KEY_F1 + 1)
-			KEY_N:
-				if in_run():
-					if sim.done: next_level()
-				elif not one_life():
-					next_level()
-				elif sim.done:
-					god_next()
-			KEY_B: if not one_life() and not in_run(): load_level(li - 1)
-			KEY_L: view = "play" if view == "menu" else "menu"
-			KEY_ESCAPE:
-				if view in ["credits", "stats", "demo_end"]: view = credits_back
-				else: open_main_menu()
-			KEY_T: toggle_neon()
-			KEY_V: toggle_mute()
-			KEY_C:
-				if view == "credits": view = credits_back
-				else:
-					credits_back = view
-					view = "credits"
+		if view == "settings":
+			_settings_key(e.keycode)
+			return
+		var kc: int = e.keycode
+		if kc == int(keys.fire): press()
+		elif kc == int(keys.retry):
+			if one_life(): start_god()
+			elif in_run() and run.finished: start_run()
+			else: load_level(li)
+		elif kc == int(keys.run): start_run()
+		elif kc == int(keys.next):
+			if in_run():
+				if sim.done: next_level()
+			elif not one_life():
+				next_level()
+			elif sim.done:
+				god_next()
+		elif kc == int(keys.back):
+			if not one_life() and not in_run(): load_level(li - 1)
+		elif kc == int(keys.levels): view = "play" if view == "menu" else "menu"
+		else:
+			match kc:
+				KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5:
+					# Preview the five celebrations (only when running from the editor, never in a shipped build)
+					if OS.is_debug_build(): start_celebration(kc - KEY_F1 + 1)
+				KEY_ESCAPE:
+					if view in ["credits", "stats", "demo_end"]: view = credits_back
+					else: open_main_menu()
+				KEY_T: toggle_neon()
+				KEY_V: toggle_mute()
+				KEY_C:
+					if view == "credits": view = credits_back
+					else:
+						credits_back = view
+						view = "credits"
 	elif e is InputEventJoypadButton and e.pressed:
 		using_pad = true
 		_pad_button(e.button_index)
 
 
 func _pad_button(b: int) -> void:
+	if view == "settings":
+		if b == JOY_BUTTON_B and listening == "": view = credits_back; _save()
+		return
 	if view == "menu":
 		match b:
 			JOY_BUTTON_DPAD_LEFT: menu_sel = posmod(menu_sel - 1, level_total())
@@ -435,6 +457,8 @@ func press() -> void:
 		if STEAM_URL != "" and hit(BTN_WISHLIST): OS.shell_open(STEAM_URL)
 		else: view = credits_back
 		return
+	if view == "settings":
+		_settings_click(); return
 	if view == "credits" or view == "stats":
 		view = credits_back; return
 	if view == "menu":
@@ -650,18 +674,18 @@ func neon_outline(r: Rect2, c: Color, a := 1.0) -> void:
 ## Tall spike strip: a thin core with teeth out to its edges, so what you see is exactly what kills.
 func spike_column(r: Rect2) -> void:
 	var inset := minf(5.0, r.size.x / 3.0)
-	draw_rect(Rect2(r.position.x + inset, r.position.y, r.size.x - 2 * inset, r.size.y), C_SPIKE)
+	_spike_rect(Rect2(r.position.x + inset, r.position.y, r.size.x - 2 * inset, r.size.y))
 	var j := 0.0
 	while j + 10.0 <= r.size.y + 0.01:
 		var y := r.position.y + j
-		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x + inset, y), Vector2(r.position.x, y + 5), Vector2(r.position.x + inset, y + 10)]), C_SPIKE)
-		draw_colored_polygon(PackedVector2Array([Vector2(r.end.x - inset, y), Vector2(r.end.x, y + 5), Vector2(r.end.x - inset, y + 10)]), C_SPIKE)
+		_spike(PackedVector2Array([Vector2(r.position.x + inset, y), Vector2(r.position.x, y + 5), Vector2(r.position.x + inset, y + 10)]))
+		_spike(PackedVector2Array([Vector2(r.end.x - inset, y), Vector2(r.end.x, y + 5), Vector2(r.end.x - inset, y + 10)]))
 		j += 10.0
 	# a point on the free end (bottom if it hangs from the ceiling, top otherwise)
 	if r.position.y < 60:
-		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, r.end.y - 6), Vector2(r.get_center().x, r.end.y), Vector2(r.end.x, r.end.y - 6)]), C_SPIKE)
+		_spike(PackedVector2Array([Vector2(r.position.x, r.end.y - 6), Vector2(r.get_center().x, r.end.y), Vector2(r.end.x, r.end.y - 6)]))
 	else:
-		draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, r.position.y + 6), Vector2(r.get_center().x, r.position.y), Vector2(r.end.x, r.position.y + 6)]), C_SPIKE)
+		_spike(PackedVector2Array([Vector2(r.position.x, r.position.y + 6), Vector2(r.get_center().x, r.position.y), Vector2(r.end.x, r.position.y + 6)]))
 
 
 func dashed_circle(pos: Vector2, r: float, c: Color) -> void:
@@ -693,7 +717,7 @@ func _draw() -> void:
 	if view in TITLE_VIEWS:
 		return  # title.gd draws the whole screen
 	draw_rect(Rect2(0, 0, W, H), C_BG)
-	if shake > 0.3:
+	if shake > 0.3 and not reduce_flash:
 		draw_set_transform(Vector2((randf() - 0.5) * shake, (randf() - 0.5) * shake))
 	_draw_world()
 	draw_set_transform(Vector2.ZERO)
@@ -714,6 +738,8 @@ func _draw() -> void:
 		_draw_credits()
 	elif view == "stats":
 		_draw_stats()
+	elif view == "settings":
+		_draw_settings()
 	elif view == "demo_end":
 		_draw_demo_end()
 
@@ -732,17 +758,40 @@ func _draw_backdrop(nc: Color, now: float) -> void:
 		for j in 12:
 			var f := float(j) / 11.0
 			draw_circle(c, rad * (1.0 - f * 0.85), Color(col, 0.019 * pulse))
-	# slow vertical light sweep
+	# slow vertical light sweep (skipped when flashing is reduced)
+	if not reduce_flash:
+		_draw_sweep(nc, now)
+	_draw_dust(nc, alt, now)
+
+
+func _draw_sweep(nc: Color, now: float) -> void:
 	var sx := fposmod(now * 70.0, W + 400.0) - 200.0
 	for j in 14:
 		var d := absf(float(j) - 6.5) / 6.5
 		draw_rect(Rect2(sx + float(j) * 14.0 - 98.0, 0, 14, H), Color(nc, 0.06 * (1.0 - d)))
+
+
+func _draw_dust(nc: Color, alt: Color, now: float) -> void:
 	# twinkling dust
 	for i in 36:
 		var q := float(i) * 91.7 + float(li)
 		var pos := Vector2(fposmod(q * 37.1, W), fposmod(q * 53.9, H))
 		var tw := 0.5 + 0.5 * sin(now * (0.9 + fposmod(q, 1.7)) + q)
 		draw_circle(pos, 1.5 + 1.5 * tw, Color(alt if i % 3 == 0 else nc, 0.1 + 0.5 * tw * tw))
+
+
+func _spike(poly: PackedVector2Array) -> void:
+	draw_colored_polygon(poly, C_SPIKE)
+	if hc_hazards:
+		var closed := poly.duplicate()
+		closed.append(poly[0])
+		draw_polyline(closed, Color.WHITE, 1.5)
+
+
+func _spike_rect(r: Rect2) -> void:
+	draw_rect(r, C_SPIKE)
+	if hc_hazards:
+		draw_rect(r, Color.WHITE, false, 1.5)
 
 
 func _draw_world() -> void:
@@ -773,19 +822,19 @@ func _draw_world() -> void:
 	for k in L.get("k", []):
 		if k.size() >= 7:
 			var r := rect_of(Sim.spike_at(k, sim.t * float(sim.d.spike)))
-			draw_rect(r, C_SPIKE)
+			_spike_rect(r)
 			var tooth := 6.0
 			var i := 0.0
 			while i < r.size.x:
 				var x2 := minf(i + 10, r.size.x)
-				draw_colored_polygon(PackedVector2Array([r.position + Vector2(i, 0), r.position + Vector2(i + 5, -tooth), r.position + Vector2(x2, 0)]), C_SPIKE)
-				draw_colored_polygon(PackedVector2Array([r.position + Vector2(i, r.size.y), r.position + Vector2(i + 5, r.size.y + tooth), r.position + Vector2(x2, r.size.y)]), C_SPIKE)
+				_spike(PackedVector2Array([r.position + Vector2(i, 0), r.position + Vector2(i + 5, -tooth), r.position + Vector2(x2, 0)]))
+				_spike(PackedVector2Array([r.position + Vector2(i, r.size.y), r.position + Vector2(i + 5, r.size.y + tooth), r.position + Vector2(x2, r.size.y)]))
 				i += 10
 			var j := 0.0
 			while j < r.size.y:
 				var y2 := minf(j + 10, r.size.y)
-				draw_colored_polygon(PackedVector2Array([r.position + Vector2(0, j), r.position + Vector2(-tooth, j + 5), r.position + Vector2(0, y2)]), C_SPIKE)
-				draw_colored_polygon(PackedVector2Array([r.position + Vector2(r.size.x, j), r.position + Vector2(r.size.x + tooth, j + 5), r.position + Vector2(r.size.x, y2)]), C_SPIKE)
+				_spike(PackedVector2Array([r.position + Vector2(0, j), r.position + Vector2(-tooth, j + 5), r.position + Vector2(0, y2)]))
+				_spike(PackedVector2Array([r.position + Vector2(r.size.x, j), r.position + Vector2(r.size.x + tooth, j + 5), r.position + Vector2(r.size.x, y2)]))
 				j += 10
 		else:
 			var r := rect_of(k)
@@ -796,9 +845,9 @@ func _draw_world() -> void:
 				for i in n:
 					var bx := r.position.x + i * sw
 					if up:
-						draw_colored_polygon(PackedVector2Array([Vector2(bx, r.end.y), Vector2(bx + sw / 2, r.position.y), Vector2(bx + sw, r.end.y)]), C_SPIKE)
+						_spike(PackedVector2Array([Vector2(bx, r.end.y), Vector2(bx + sw / 2, r.position.y), Vector2(bx + sw, r.end.y)]))
 					else:
-						draw_colored_polygon(PackedVector2Array([Vector2(bx, r.position.y), Vector2(bx + sw / 2, r.end.y), Vector2(bx + sw, r.position.y)]), C_SPIKE)
+						_spike(PackedVector2Array([Vector2(bx, r.position.y), Vector2(bx + sw / 2, r.end.y), Vector2(bx + sw, r.position.y)]))
 			else:
 				spike_column(r)
 
@@ -1006,7 +1055,7 @@ func _draw_lasers(now: float) -> void:
 			var flick := 0.25 if fmod(now * 18.0, 1.0) > 0.5 else 0.08
 			draw_line(a, b, Color(C_LASER, flick), 1.5)
 		else:
-			draw_dashed_line(a, b, Color(C_LASER, 0.10), 1.0, 6.0)
+			draw_dashed_line(a, b, Color(C_LASER, 0.45 if hc_hazards else 0.10), 1.0, 6.0)
 		for e in [a, b]:
 			draw_rect(Rect2(e - Vector2(5, 5), Vector2(10, 10)), Color("#2a0a12"))
 			draw_rect(Rect2(e - Vector2(5, 5), Vector2(10, 10)), C_LASER, false, 1.5)
@@ -1088,7 +1137,9 @@ func _draw_hud() -> void:
 			tip = "Point the stick where you want to fly, then press A. You launch that way."
 		text(tip, W / 2, 80 + ty, 15, C_SUB)
 		var controls := "stick = aim · A / RT = fire · Y restart · Start levels" if using_pad else \
-			"click / tap / space = fire  ·  R retry  ·  F full run  ·  N / B next / back  ·  L levels  ·  Esc menu"
+			"click / tap / %s = fire  ·  %s retry  ·  %s full run  ·  %s / %s next / back  ·  %s levels  ·  Esc menu" % [
+				_key_name(int(keys.fire)).to_lower(), _key_name(int(keys.retry)), _key_name(int(keys.run)),
+				_key_name(int(keys.next)), _key_name(int(keys.back)), _key_name(int(keys.levels))]
 		text(controls, W / 2, 102 + ty, 13, C_DIM)
 
 
@@ -1286,6 +1337,91 @@ func _draw_stats() -> void:
 
 
 ## Required attributions: music (CC BY 4.0), engine (MIT), symbol font (Bitstream Vera).
+# ---------------------------------------------------------------- settings (accessibility + controls)
+
+const SET_ROWS := ["flash", "contrast", "key:fire", "key:retry", "key:next", "key:back", "key:levels", "key:run", "reset", "back"]
+
+func set_row_rect(i: int) -> Rect2:
+	return Rect2(210, 100 + i * 34 + (18 if i >= 2 else 0) + (14 if i >= 8 else 0), 540, 28)
+
+
+func _key_name(code: int) -> String:
+	return OS.get_keycode_string(code)
+
+
+func _settings_activate(i: int) -> void:
+	var id: String = SET_ROWS[i]
+	set_note = ""
+	if id == "flash": reduce_flash = not reduce_flash; shake = 0.0
+	elif id == "contrast": hc_hazards = not hc_hazards
+	elif id.begins_with("key:"): listening = id.substr(4); set_note = "Press a key for \"%s\"  (Esc cancels)" % listening
+	elif id == "reset":
+		keys = {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
+	elif id == "back": view = credits_back; _save(); return
+	sfx.beep(520, 0.05, "triangle", 0.05)
+	_save()
+
+
+func _settings_click() -> void:
+	if listening != "":
+		listening = ""; set_note = ""; return
+	for i in SET_ROWS.size():
+		if hit(set_row_rect(i)):
+			set_sel = i; _settings_activate(i); return
+
+
+func _settings_key(code: int) -> void:
+	if listening != "":
+		if code == KEY_ESCAPE:
+			listening = ""; set_note = ""; return
+		# keys that already mean something fixed (menus, mute, neon, credits, previews)
+		var reserved := [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_T, KEY_V, KEY_C, KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5]
+		if code in reserved:
+			set_note = "%s is reserved. Pick another key." % _key_name(code); sfx.beep(150, 0.1, "square", 0.05); return
+		for k in keys:   # taking a key from another action swaps the two
+			if k != listening and int(keys[k]) == code: keys[k] = keys[listening]
+		keys[listening] = code
+		listening = ""; set_note = ""
+		sfx.beep(660, 0.06, "sine", 0.06); _save()
+		return
+	match code:
+		KEY_ESCAPE: view = credits_back; _save()
+		KEY_UP: set_sel = posmod(set_sel - 1, SET_ROWS.size())
+		KEY_DOWN: set_sel = posmod(set_sel + 1, SET_ROWS.size())
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: _settings_activate(set_sel)
+
+
+func _draw_settings() -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.97))
+	text("SETTINGS", W / 2, 66, 28, C_TEXT, "c", true)
+	text("ACCESSIBILITY", 210, 94, 11, C_DIM, "l")
+	text("CONTROLS  (click a row, then press the new key)", 210, 100 + 34 * 2 + 18 - 6, 11, C_DIM, "l")
+	for i in SET_ROWS.size():
+		var id: String = SET_ROWS[i]
+		var r := set_row_rect(i)
+		var on := hit(r) or i == set_sel
+		draw_rect(r, C_PANEL_HI if on else C_PANEL)
+		var label := ""
+		var value := ""
+		var vcol := C_SUB
+		if id == "flash":
+			label = "Reduce flashing & shake"; value = "ON" if reduce_flash else "off"; vcol = C_GOAL if reduce_flash else C_DIM
+		elif id == "contrast":
+			label = "High-contrast hazards"; value = "ON" if hc_hazards else "off"; vcol = C_GOAL if hc_hazards else C_DIM
+		elif id.begins_with("key:"):
+			var k := id.substr(4)
+			for row in KEY_ROWS:
+				if row[0] == k: label = row[1]
+			value = "press a key…" if listening == k else _key_name(int(keys[k]))
+			vcol = C_ORB if listening == k else C_TEXT
+		elif id == "reset": label = "Reset keys to default"
+		else: label = "Back"
+		text(label, r.position.x + 14, r.position.y + 19, 14, C_TEXT, "l", true)
+		if value != "": text(value, r.end.x - 14, r.position.y + 19, 14, vcol, "r", true)
+	if set_note != "": text(set_note, W / 2, 504, 13, C_ORB, "c", true)
+	else: text("Up / Down + Enter, or click.   T neon · V mute · C credits · Esc are fixed keys.", W / 2, 504, 11, C_DIM, "c")
+
+
 func _draw_credits() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.96))
 	text("CREDITS", W / 2, 70, 28, C_TEXT, "c", true)
