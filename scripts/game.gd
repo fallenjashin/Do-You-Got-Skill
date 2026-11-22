@@ -720,6 +720,33 @@ func _draw() -> void:
 		_draw_demo_end()
 
 
+## Cosmetic animated backdrop (behind everything): drifting glow orbs, a slow light sweep and twinkling
+## dust, all in the level's neon colour. Purely visual; never touches the sim.
+func _draw_backdrop(nc: Color, now: float) -> void:
+	var alt := Color.from_hsv(fposmod(nc.h + 0.12, 1.0), 0.7, 1.0)
+	for i in 7:
+		var k := float(i) + float(li) * 3.1
+		var c := Vector2(W * (0.5 + 0.46 * sin(k * 12.9898 + now * (0.05 + 0.012 * i))),
+				H * (0.5 + 0.46 * sin(k * 78.233 + now * (0.04 + 0.01 * i) + 1.7)))
+		var rad := 110.0 + 18.0 * float(i % 4)
+		var pulse := 0.65 + 0.35 * sin(now * (0.7 + 0.13 * i) + k)
+		var col := nc if i % 2 == 0 else alt
+		for j in 12:
+			var f := float(j) / 11.0
+			draw_circle(c, rad * (1.0 - f * 0.85), Color(col, 0.019 * pulse))
+	# slow vertical light sweep
+	var sx := fposmod(now * 70.0, W + 400.0) - 200.0
+	for j in 14:
+		var d := absf(float(j) - 6.5) / 6.5
+		draw_rect(Rect2(sx + float(j) * 14.0 - 98.0, 0, 14, H), Color(nc, 0.06 * (1.0 - d)))
+	# twinkling dust
+	for i in 36:
+		var q := float(i) * 91.7 + float(li)
+		var pos := Vector2(fposmod(q * 37.1, W), fposmod(q * 53.9, H))
+		var tw := 0.5 + 0.5 * sin(now * (0.9 + fposmod(q, 1.7)) + q)
+		draw_circle(pos, 1.5 + 1.5 * tw, Color(alt if i % 3 == 0 else nc, 0.1 + 0.5 * tw * tw))
+
+
 func _draw_world() -> void:
 	var L: Dictionary = sim.L
 	var now := Time.get_ticks_msec() / 1000.0
@@ -727,6 +754,7 @@ func _draw_world() -> void:
 
 	var nc := neon()
 	var breathe := 0.88 + 0.12 * sin(now * 2.2)   # slow neon "hum"
+	_draw_backdrop(nc, now)
 	for x in range(0, int(W), 40): draw_line(Vector2(x, 0), Vector2(x, H), Color(nc, 0.035))
 	for y in range(0, int(H), 40): draw_line(Vector2(0, y), Vector2(W, y), Color(nc, 0.035))
 

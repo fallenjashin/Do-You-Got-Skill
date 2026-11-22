@@ -91,6 +91,7 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   3 beat the bot (shots < par), 4 top 10, 5 first place. `Game.celebration_tier()` picks it; tiers 4-5 need
   `game.leaderboard_rank` (1-10 / 1), which nothing sets until Steam leaderboards exist. In the editor (debug
   build only) F1-F5 preview the five tiers.
+- **Animated backdrop** (`_draw_backdrop` in game.gd, cosmetic, uses wall-clock time): drifting glow orbs, a slow light sweep and twinkling dust in the level's neon colour, drawn behind the grid.
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
