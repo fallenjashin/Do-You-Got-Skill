@@ -92,6 +92,7 @@ var credits_back := "menu"   # where closing the credits returns to
 var cel = null                # the level-complete celebration being played (scripts/celebrate.gd)
 ## Your place on the level's online leaderboard after a win: 0 = unknown / not ranked.
 ## Nothing sets this until Steam leaderboards exist; when they do, set it before start_celebration() runs.
+var beat_both := false   # this clear beat an existing best time AND an existing fewest-shots record
 var leaderboard_rank := 0
 var booting := false         # true while _ready builds the first level, so no level song starts
 var restart_music := false   # set when a level is started from a menu
@@ -192,11 +193,6 @@ func level_total() -> int: return data.levels.size()
 ## Levels you can actually play: all of them, or the demo's first DEMO_LEVELS.
 func playable_total() -> int: return mini(DEMO_LEVELS, level_total()) if demo else level_total()
 
-func par(i: int):
-	var table: Array = data.par.get("master" if diff == "god" else diff, [])
-	return int(table[i]) if i < table.size() and table[i] != null else null
-
-
 func load_level(i: int) -> void:
 	li = posmod(i, playable_total())
 	sim = Sim.new(li, diff)
@@ -206,6 +202,7 @@ func load_level(i: int) -> void:
 	ghost = ghosts.get(key(li), null)
 	new_best = false
 	new_fewest = false
+	beat_both = false
 	cel = null
 	if not booting:   # while the game starts up the title song plays, not this level's
 		music.play_for_level(li, one_life(), restart_music)
@@ -547,6 +544,7 @@ func _physics_process(_delta: float) -> void:
 		stats.clears += 1; stats.clear_ticks += sim.t
 		sfx.beep(660, 0.1, "sine", 0.08)
 		get_tree().create_timer(0.1).timeout.connect(func(): sfx.beep(990, 0.18, "sine", 0.08))
+		var had_records: bool = best.has(skey(li)) and best.has(key(li))
 		if not best.has(skey(li)) or sim.shots < best[skey(li)]:
 			best[skey(li)] = sim.shots; new_fewest = true
 		if one_life():
@@ -562,33 +560,33 @@ func _physics_process(_delta: float) -> void:
 						best["god:shots"] = god.shots; new_fewest = true
 		elif not best.has(key(li)) or sim.t < best[key(li)]:
 			best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate(); new_best = true
+		beat_both = had_records and new_best and new_fewest and not one_life()
 		if in_run(): _run_level_won()
 		start_celebration()
 		_save()
 
 
-## 1 cleared · 2 personal best · 3 beat the bot (under par) · 4 top 10 · 5 first place.
-static func celebration_tier(was_best: bool, was_fewest: bool, shots: int, par_v, rank: int) -> int:
+## 1 cleared · 2 personal best · 3 double best (beat BOTH your old best time and old fewest shots; a first clear is not) · 4 top 10 · 5 first place.
+static func celebration_tier(was_best: bool, was_fewest: bool, double_best: bool, rank: int) -> int:
 	if rank == 1: return 5
 	if rank >= 2 and rank <= 10: return 4
-	if par_v != null and shots < int(par_v): return 3
+	if double_best: return 3
 	if was_best or was_fewest: return 2
 	return 1
 
 
 ## Pick the tier for the level just won and start its animation. force_tier (1-5) is for previews and tests.
 func start_celebration(force_tier := 0) -> void:
-	var pr = par(li)
-	var tier := force_tier if force_tier > 0 else celebration_tier(new_best, new_fewest, sim.shots, pr, leaderboard_rank)
+	var tier := force_tier if force_tier > 0 else celebration_tier(new_best, new_fewest, beat_both, leaderboard_rank)
 	var head := ""
 	var sub := ""
 	match tier:
 		2:
-			head = "NEW BEST" if new_best and new_fewest else ("NEW BEST TIME" if new_best else "FEWEST SHOTS")
-			sub = "%s  ·  %d shots" % [fmt(sim.t), sim.shots]
+			head = "NEW BEST TIME" if new_best else "FEWEST SHOTS"
+			sub = "%s  ·  %d shot%s" % [fmt(sim.t), sim.shots, "" if sim.shots == 1 else "s"]
 		3:
-			head = "BEAT THE BOT"
-			sub = "%d shots  ·  par %s" % [sim.shots, str(pr) if pr != null else "—"]
+			head = "DOUBLE BEST"
+			sub = "%s  ·  %d shot%s  ·  best time and fewest shots" % [fmt(sim.t), sim.shots, "" if sim.shots == 1 else "s"]
 		4:
 			head = "TOP 10"
 			sub = "#%d on the leaderboard" % maxi(leaderboard_rank, 2)
@@ -1062,9 +1060,7 @@ func _draw_hud() -> void:
 		text("shots %d   fewest run %s" % [god.shots + (0 if sim.done else sim.shots), str(best["god:shots"]) if best.has("god:shots") else "—"], W - 34, 58, 13, C_SHOT, "r", true)
 	else:
 		text("%s   best %s   deaths %d" % [fmt(sim.t), fmt(best[key(li)]) if best.has(key(li)) else "—", deaths], W - 34, 39, 15, Color("#c6cde8"), "r", true)
-		var pr = par(li)
-		var over: bool = pr != null and sim.shots > pr
-		text("shots %d   par %s   fewest %s" % [sim.shots, str(pr) if pr != null else "—", str(best[skey(li)]) if best.has(skey(li)) else "—"], W - 34, 58, 13, C_RED if over else C_SHOT, "r", true)
+		text("shots %d   fewest %s" % [sim.shots, str(best[skey(li)]) if best.has(skey(li)) else "—"], W - 34, 58, 13, C_SHOT, "r", true)
 	if not sim.done and (sim.phased or sim.g < 0):
 		if sim.phased and sim.g < 0:
 			text("PHASED — touch purple to unlock goal", W / 2 - 60, 39, 14, C_PURPLE, "c", true)
@@ -1138,7 +1134,6 @@ func _draw_done() -> void:
 		text(line + "   ·   %d shots   ·   %d deaths" % [run.shots, run.deaths], W / 2, 295, 17, C_SUB)
 		button("Run again (F)", BTN_RETRY); button("Levels (L)", BTN_LEVELS)
 		return
-	var pr = par(li)
 	var sh := sim.shots
 	if in_run():
 		var d := "" if run.delta == null else "   %s vs best run" % fmt_delta(run.delta)
@@ -1146,9 +1141,7 @@ func _draw_done() -> void:
 	text(fmt(sim.t), W / 2 - 110, 235, 44, C_GOAL if new_best else C_TEXT, "c", true)
 	text("%d shot%s" % [sh, "" if sh == 1 else "s"], W / 2 + 110, 235, 44, C_GOAL if new_fewest else C_SHOT, "c", true)
 	text("NEW BEST TIME" if new_best else "best %s" % fmt(best[key(li)]), W / 2 - 110, 262, 13, C_SUB, "c", true)
-	text("NEW FEWEST SHOTS" if new_fewest else "fewest %s  ·  par %s" % [str(best[skey(li)]), str(pr) if pr != null else "—"], W / 2 + 110, 262, 13, C_SUB, "c", true)
-	if pr != null and sh <= pr:
-		text("★ " + ("UNDER PAR — you beat the bot" if sh < pr else "PAR"), W / 2, 300, 16, C_ORB, "c", true)
+	text("NEW FEWEST SHOTS" if new_fewest else "fewest %s" % str(best[skey(li)]), W / 2 + 110, 262, 13, C_SUB, "c", true)
 	button("Retry (R)", BTN_RETRY); button("Levels (L)", BTN_LEVELS); button("Next (N)", BTN_NEXT)
 
 
@@ -1202,14 +1195,9 @@ func _draw_menu() -> void:
 		text(nm, b.get_center().x, b.position.y + 28, 11 if nm.length() <= 11 else 9, C_TEXT, "c", true)
 		var bt = best.get(key(i), null)
 		var bs = best.get(skey(i), null)
-		var pr = par(i)
-		var mark := ""
-		if bs != null and pr != null:
-			mark = "★" if bs < pr else ("✓" if bs == pr else "")
-		var line := "%s %d/%s %s" % [fmt(bt), int(bs), str(pr) if pr != null else "—", mark] if bt != null and bs != null \
-			else "par %s" % (str(pr) if pr != null else "—")
-		text(line, b.get_center().x, b.position.y + 42, 10, (C_ORB if mark != "" else C_GOAL) if bt != null else C_DIM)
-	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  time  shots/par  (★ under par)"
+		if bt != null and bs != null:
+			text("%s  %d shots" % [fmt(bt), int(bs)], b.get_center().x, b.position.y + 42, 10, C_GOAL)
+	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  best time  and  fewest shots"
 	if demo: legend = "DEMO · first %d of %d levels · the full game unlocks the rest" % [playable_total(), level_total()]
 	text(legend, W / 2, 528, 11, C_DIM)
 	draw_rect(CREDITS_BOX, C_PANEL_HI if hit(CREDITS_BOX) else C_PANEL)

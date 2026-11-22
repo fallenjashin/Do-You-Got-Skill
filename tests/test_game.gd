@@ -387,14 +387,12 @@ func _initialize() -> void:
 
 	# ---- level-complete celebration tiers
 	var T = game.get_script()
-	check(T.celebration_tier(false, false, 5, 4, 0) == 1, "a plain clear is tier 1")
-	check(T.celebration_tier(true, false, 5, 4, 0) == 2 and T.celebration_tier(false, true, 5, 4, 0) == 2, "a new best time or fewest shots is tier 2")
-	check(T.celebration_tier(false, false, 3, 4, 0) == 3 and T.celebration_tier(true, true, 3, 4, 0) == 3, "beating par (the bot) is tier 3, over a personal best")
-	check(T.celebration_tier(true, true, 4, 4, 0) == 2, "matching par is not beating the bot")
-	check(T.celebration_tier(false, false, 3, null, 0) == 1, "no par means no bot to beat")
-	check(T.celebration_tier(true, true, 3, 4, 7) == 4 and T.celebration_tier(false, false, 9, 4, 10) == 4, "a top-10 rank is tier 4, over everything below")
-	check(T.celebration_tier(false, false, 9, 4, 1) == 5, "first place is tier 5")
-	check(T.celebration_tier(false, false, 9, 4, 11) == 1, "rank 11 is not top 10")
+	check(T.celebration_tier(false, false, false, 0) == 1, "a plain clear is tier 1")
+	check(T.celebration_tier(true, false, false, 0) == 2 and T.celebration_tier(false, true, false, 0) == 2, "a new best time or fewest shots is tier 2")
+	check(T.celebration_tier(true, true, true, 0) == 3 and T.celebration_tier(true, true, false, 0) == 2, "beating both old records is tier 3; a first clear (both new, nothing beaten) stays tier 2")
+	check(T.celebration_tier(true, true, true, 7) == 4 and T.celebration_tier(false, false, false, 10) == 4, "a top-10 rank is tier 4, over everything below")
+	check(T.celebration_tier(false, false, false, 1) == 5, "first place is tier 5")
+	check(T.celebration_tier(false, false, false, 11) == 1, "rank 11 is not top 10")
 	game.set_diff("medium"); game.demo = false; game.load_level(0)
 	game.aim = Vector2(game.sim.px, 0); game.press()
 	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0

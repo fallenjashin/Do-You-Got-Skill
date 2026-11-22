@@ -25,7 +25,6 @@ import hashlib, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PATH = os.path.join(ROOT, "data", "levels.json")
-PAR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "par.json")
 
 FLOOR = lambda x0, x1: [x0, 500, x1 - x0, 20]        # spike strip on the floor
 CEIL = lambda x0, x1: [x0, 20, x1 - x0, 22]          # spike strip on the ceiling
@@ -367,53 +366,10 @@ def build():
     data = json.load(open(PATH))
     data["levels"] = levels
     data["worlds"] = WORLD_NAMES
-    # Par lives in par.json, tied to a fingerprint of each level + difficulty + physics tuning.
-    # Change a level and only that level's par is dropped ("—" in game) until par.js is re-run.
-    data["par"] = {}
-    store = json.load(open(PAR_PATH)) if os.path.exists(PAR_PATH) else {}
-    stale = 0
-    for diff, entries in store.items():
-        if diff not in data["difficulties"]:
-            continue
-        row = []
-        for i, lvl in enumerate(levels):
-            e = entries.get(str(i))
-            ok = e is not None and e["fp"] == fingerprint(data, lvl, diff)
-            stale += e is not None and not ok
-            row.append(e["par"] if ok else None)
-        data["par"][diff] = row
+    data.pop("par", None)
     json.dump(data, open(PATH, "w"), indent=1)
-    print(f"wrote {len(levels)} levels to {PATH}" + (f" ({stale} par values out of date: re-run par.js)" if stale else ""))
-
-
-def fingerprint(data, lvl, diff):
-    dset = dict(data["difficulties"][diff])
-    if "rooms" not in lvl:
-        dset.pop("keep", None)   # carrying speed between screens only matters with screens
-    blob = json.dumps([lvl, dset, data["tuning"]], sort_keys=True)
-    return hashlib.sha1(blob.encode()).hexdigest()[:12]
-
-
-def save_par(diff, values):
-    """Store par.js output, e.g. save_par("medium", [2, 3, null, ...])."""
-    data = json.load(open(PATH))
-    store = json.load(open(PAR_PATH)) if os.path.exists(PAR_PATH) else {}
-    # par.js is a random search, so its answer is an upper bound. Keep the lowest value ever
-    # found for the level as it is now: re-running par.js can only make par tighter.
-    old, row = store.get(diff, {}), {}
-    for i, (lvl, v) in enumerate(zip(data["levels"], values)):
-        fp = fingerprint(data, lvl, diff)
-        prev = old.get(str(i))
-        best = [x for x in [v, prev["par"] if prev and prev["fp"] == fp else None] if x is not None]
-        if best:
-            row[str(i)] = {"par": min(best), "fp": fp}
-    store[diff] = row
-    json.dump(store, open(PAR_PATH, "w"), indent=1, sort_keys=True)
+    print(f"wrote {len(levels)} levels to {PATH}")
 
 
 if __name__ == "__main__":
-    # python3 build_levels.py                         rebuild data/levels.json
-    # python3 build_levels.py --par medium '[2,3,..]' store par.js output, then rebuild
-    if len(sys.argv) == 4 and sys.argv[1] == "--par":
-        save_par(sys.argv[2], json.loads(sys.argv[3]))
     build()

@@ -25,7 +25,7 @@ with GitHub Desktop and press F5 in Godot.
 - `tools/prototype/recoil.html`: the original browser prototype. Its `<script id="core">` is a JS
   copy of the physics used by the bots; it **must stay identical to `sim.gd`**.
 - `tools/bot/`: Node bots that read `data/levels.json`. `check.js` (solver: beatable? which mechanics
-  used?), `par.js` (fewest-shot par), `rates.js` (random-play difficulty), `golden.js` (reference runs).
+  used?), `rates.js` (random-play difficulty), `golden.js` (reference runs).
 - `tests/test_parity.gd` (replays 598 JS reference runs in Godot; must all match) and
   `tests/test_game.gd` (drives the real scene; 67 checks). CI runs both on every push.
 - `.github/workflows/web.yml`: tests, then exports Web and deploys GitHub Pages
@@ -63,6 +63,7 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 - Moving objects are drawn filled; static walls are neon outlines; anything red kills.
 - Music volume is in 1% steps (main-menu slider); V mutes. Starting a level from a menu restarts its song; retrying doesn't.
 - Leaderboard is a placeholder until there's a Steam app.
+- **No par / bot comparison.** Removed on purpose (owner decision): no par in the HUD, level grid, clear screen or data. Don't re-add without asking.
 - **Finals are 3 screens** (`rooms` in build_levels.py `ROOMS`). Screen 1 is the original layout; its
   goal is an exit teleporter (green rings), the last screen ends on the green dot. Shots carry over
   between screens; speed carries over on Hard/Master/God (`"keep": true` in difficulties), not on
@@ -88,7 +89,7 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   shows "DEMO COMPLETE". Steam/Windows builds and the editor are the full game. Demo runs aren't saved as
   records. Set `STEAM_URL` in game.gd once the store page exists (adds a Wishlist button).
 - **Level-complete celebrations** (`scripts/celebrate.gd`, purely cosmetic): tier 1 clear, 2 personal best,
-  3 beat the bot (shots < par), 4 top 10, 5 first place. `Game.celebration_tier()` picks it; tiers 4-5 need
+  3 double best (beat BOTH your old best time and old fewest shots; a first clear is only tier 2), 4 top 10, 5 first place. `Game.celebration_tier()` picks it; tiers 4-5 need
   `game.leaderboard_rank` (1-10 / 1), which nothing sets until Steam leaderboards exist. In the editor (debug
   build only) F1-F5 preview the five tiers.
 - **Animated backdrop** (`_draw_backdrop` in game.gd, cosmetic, uses wall-clock time): drifting glow orbs, a slow light sweep and twinkling dust in the level's neon colour, drawn behind the grid.
@@ -98,17 +99,6 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
 
 ## Open items / next steps
 
-- **Finals par:** Easy/Medium are filled with `node tools/bot/finals_par.js <easy|medium> 50-59` (sum of each
-  screen's own par; ~25 min on 2 cores) then `build_levels.py --par`. A few finals have no par because the
-  search found no win on one screen: easy 55, 58; medium 54, 55, 57, 58 (re-run with a bigger budget).
-  **Hard/Master/God finals are still empty**: they carry speed between screens, so par must come from
-  good full runs, set by hand.
-- **Par:** easy/medium/hard are filled for levels 1-50 (finals: see above); **master (also used by God Mode) is still empty**, and a few
-  levels have no par yet (search found no win): 25, 43, 44, 45, 50 on some difficulties. Par is stored
-  in `tools/levels/par.json` keyed by a fingerprint of level + difficulty + tuning (editing a level drops
-  only its par). Run `node tools/bot/par.js master 0-29` (and `30-59`) — about 1 h per half on 2 cores;
-  a cloud background job is killed at 2 h, so run halves — then
-  `python3 tools/levels/build_levels.py --par master '<the printed array>'`. Re-runs only ever lower par.
 - **Web deploy:** `tools/web/cachebust.sh` (unique game-data name) and `tools/web/smoke.py` (headless
   Chrome must load the build, reach a level and fire; nothing deploys otherwise). Run both locally
   after a web export if you touch the export or the HTML.

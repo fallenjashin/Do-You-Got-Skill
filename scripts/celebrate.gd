@@ -2,7 +2,7 @@ extends RefCounted
 ## Level-complete celebration. Five tiers, each bigger than the last:
 ##   1  cleared a level            green ring + sparks
 ##   2  new personal best          rings, sparks, "NEW BEST" banner, rising notes
-##   3  beat the bot (under par)   gold: stars, confetti, flash, banner, short fanfare
+##   3  double best (time + shots) gold: stars, confetti, flash, banner, short fanfare
 ##   4  top 10 on the leaderboard  confetti rain, three fireworks, bigger banner, long fanfare
 ##   5  #1 on the leaderboard      non-stop fireworks and gold confetti, crown, "#1", bass drop
 ## game.gd decides the tier (see Game.celebration_tier) and calls start(); this class only animates.

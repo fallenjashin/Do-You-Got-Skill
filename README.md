@@ -74,7 +74,7 @@ Rule of thumb on screen: anything **filled** moves; outlined neon is a static wa
 
 ```
 project.godot
-data/levels.json          ← every level, difficulty setting, par and physics constant
+data/levels.json          ← every level, difficulty setting and physics constant
 scripts/sim.gd            ← rules + physics only (deterministic; no drawing, no input)
 scripts/game.gd           ← input, drawing, menus, difficulties, God Mode, saving
 scripts/sfx.gd            ← placeholder beeps synthesised in code
@@ -131,7 +131,6 @@ cd tools/bot
 node solve.js            # can every level be beaten, and which mechanics did the solution use?
 node solve.js 5,23       # just levels 6 and 24 (0-based)
 node rates.js 8000       # random-play win rate per difficulty (a rough difficulty measure)
-node par.js medium       # fewest-shot search for one difficulty (par)
 node golden.js           # re-record tests/golden_runs.json after an intentional physics change
 ```
 
@@ -162,8 +161,6 @@ python3 tools/levels/build_levels.py
 cd tools/bot
 node check.js medium            # every level: beatable? search effort? which mechanics did wins use?
 node check.js master 40-44 3    # a range, 3 attempts each
-node par.js medium              # fewest-shot par for one difficulty (optional range: node par.js master 0-29)
-python3 ../levels/build_levels.py --par medium '[...]'   # store it (tools/levels/par.json); keeps the lowest ever found
 node golden.js                  # re-record the reference runs, then run tests/test_parity.gd
 ```
 
