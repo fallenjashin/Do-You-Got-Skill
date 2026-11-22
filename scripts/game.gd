@@ -46,7 +46,7 @@ const C_SHIP := Color("#ff4d6d")
 var data: Dictionary
 var sim: Sim
 var li := 0
-var view := "play"            # "play" | "menu" | "credits" | "stats" | "settings" | "demo_end" (+ TITLE_VIEWS)
+var view := "play"            # "play" | "menu" | "pause" | "credits" | "stats" | "settings" | "demo_end" (+ TITLE_VIEWS)
 ## The free web build is a demo: the first DEMO_LEVELS levels are playable, the rest show a lock.
 ## The Web export preset has the custom feature "demo"; Steam builds and the editor are the full game.
 const DEMO_LEVELS := 15
@@ -93,6 +93,21 @@ var hc_hazards := false     # accessibility: hazards get a white outline so they
 var keys := {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
 const KEY_ROWS := [["fire", "Fire"], ["retry", "Retry"], ["next", "Next level"], ["back", "Previous level"], ["levels", "Level select"], ["run", "Full Run"]]
 var set_sel := 0
+const FEEDBACK_URL := ""     # set to a Discord invite / form link: adds a "Send feedback" button to the menus
+var practice := false        # practice mode: infinite shots, nothing is saved (not in Full Run / God Mode)
+var pause_sel := 0
+var flawless := true         # no deaths since you started this level (for star ratings)
+var star_li := -1
+var last_stars := 0
+var skin := 0
+const SKINS := [  # [name, body, glow, levels you must clear to unlock it]
+	["Classic", Color("#e8ecff"), Color("#7aa2ff"), 0],
+	["Mint", Color("#d8fff0"), Color("#2ed573"), 5],
+	["Sunset", Color("#fff0d8"), Color("#ff9f43"), 15],
+	["Violet", Color("#f0e6ff"), Color("#b388ff"), 25],
+	["Gold", Color("#fff6cc"), Color("#ffd166"), 40],
+	["Rainbow", Color("#ffffff"), Color("#ffffff"), 60],
+]
 # One-time coaching tips: shown the first time the situation happens, remembered in the save.
 const HINTS := {
 	"arc": "Gravity bends your path, so you won't land where you aimed. Aim a little higher.",
@@ -162,6 +177,7 @@ func _load_save() -> void:
 		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
 		reduce_flash = bool(parsed.get("reduce_flash", false))
 		hc_hazards = bool(parsed.get("hc_hazards", false))
+		skin = clampi(int(parsed.get("skin", 0)), 0, SKINS.size() - 1)
 		var hs = parsed.get("hints", null)
 		if hs is Dictionary:
 			for k in hs:
@@ -194,7 +210,7 @@ func _migrate_old_save() -> void:
 func _save() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats, "reduce_flash": reduce_flash, "hc_hazards": hc_hazards, "keys": keys, "hints": hints_seen}))
+		f.store_string(JSON.stringify({"best": best, "diff": diff, "neon": neon_mode, "music": music_volume, "music_on": music_unmuted, "last": last_level, "stats": stats, "reduce_flash": reduce_flash, "hc_hazards": hc_hazards, "keys": keys, "hints": hints_seen, "skin": skin}))
 
 
 # ---------------------------------------------------------------- helpers
@@ -235,6 +251,8 @@ func load_level(i: int) -> void:
 	toast = {}
 	hint_queue = []
 	arc_timer = 0
+	if li != star_li:
+		star_li = li; flawless = true
 	if not booting:   # while the game starts up the title song plays, not this level's
 		music.play_for_level(li, one_life(), restart_music)
 	restart_music = false
@@ -280,6 +298,7 @@ func start_from_menu(i: int) -> void:
 
 ## Full Run from level 1 (God Mode already is a full run: one life, same idea).
 func start_run() -> void:
+	practice = false
 	restart_music = true
 	if one_life():
 		start_god()
@@ -302,6 +321,23 @@ func resume_play() -> void:
 	music.play_for_level(li, one_life())
 
 
+func practicing() -> bool:
+	return practice and not one_life() and not in_run()
+
+
+## How many different levels you have cleared (any difficulty): unlocks ball colours.
+func cleared_levels() -> int:
+	var seen := {}
+	for k in best:
+		var parts: PackedStringArray = str(k).split(":")
+		if parts.size() >= 2 and parts[0] in DIFFS and parts[1].is_valid_int(): seen[int(parts[1])] = true
+	return seen.size()
+
+
+func skin_unlocked(i: int) -> bool:
+	return cleared_levels() >= int(SKINS[i][3])
+
+
 func open_main_menu() -> void:
 	title.open_main(true)
 
@@ -311,6 +347,7 @@ func cycle_music() -> void:
 
 
 func start_god() -> void:
+	practice = false
 	god.total = 0; god.shots = 0; god.finished = false
 	load_level(0)
 
@@ -391,6 +428,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		if view == "settings":
 			_settings_key(e.keycode)
 			return
+		if view == "pause":
+			_pause_key(e.keycode)
+			return
 		var kc: int = e.keycode
 		if kc == int(keys.fire): press()
 		elif kc == int(keys.retry):
@@ -415,6 +455,8 @@ func _unhandled_input(e: InputEvent) -> void:
 					if OS.is_debug_build(): start_celebration(kc - KEY_F1 + 1)
 				KEY_ESCAPE:
 					if view in ["credits", "stats", "demo_end"]: view = credits_back
+					elif view == "play": pause_sel = 0; view = "pause"
+					elif view == "pause": view = "play"
 					else: open_main_menu()
 				KEY_T: toggle_neon()
 				KEY_V: toggle_mute()
@@ -431,6 +473,12 @@ func _unhandled_input(e: InputEvent) -> void:
 func _pad_button(b: int) -> void:
 	if view == "settings":
 		if b == JOY_BUTTON_B and listening == "": view = credits_back; _save()
+		return
+	if view == "pause":
+		if b == JOY_BUTTON_B or b == JOY_BUTTON_START: view = "play"
+		elif b == JOY_BUTTON_DPAD_UP: pause_sel = posmod(pause_sel - 1, pause_rows().size())
+		elif b == JOY_BUTTON_DPAD_DOWN: pause_sel = posmod(pause_sel + 1, pause_rows().size())
+		elif b == JOY_BUTTON_A: _pause_activate(pause_sel)
 		return
 	if view == "menu":
 		match b:
@@ -475,6 +523,8 @@ func press() -> void:
 		if STEAM_URL != "" and hit(BTN_WISHLIST): OS.shell_open(STEAM_URL)
 		else: view = credits_back
 		return
+	if view == "pause":
+		_pause_click(); return
 	if view == "settings":
 		_settings_click(); return
 	if view == "credits" or view == "stats":
@@ -519,7 +569,8 @@ func press() -> void:
 		if along > 0.5: _coach("chain")
 		elif along < -0.4: _coach("brake")
 	if li == 0 and sim.shots == 1: arc_timer = 45
-	stats.shots += 1
+	if practicing(): sim.ammo = sim.ammo_max
+	else: stats.shots += 1
 	shake = 5.0
 	sfx.beep(180 + randf() * 40, 0.09, "sawtooth", 0.06)
 	var n := dir.normalized() if dir.length() > 0 else Vector2.DOWN
@@ -543,7 +594,8 @@ func _physics_process(_delta: float) -> void:
 		if death_face.life <= 0: death_face = {}
 	if view != "play":
 		return
-	if not sim.done:
+	if practicing(): sim.ammo = sim.ammo_max
+	if not sim.done and not practicing():
 		stats.ticks += 1
 		if stats.ticks % 600 == 0: _save()   # every 10 s of play, so a closed tab loses little
 	if cel != null: cel.update(1.0 / 60.0)
@@ -591,7 +643,9 @@ func _physics_process(_delta: float) -> void:
 
 	if res == "dead":
 		deaths += 1; sfx.beep(90, 0.25, "sawtooth", 0.07); shake = 10.0
-		stats.deaths += 1
+		if not practicing():
+			stats.deaths += 1
+			flawless = false
 		stats.by_level[str(li)] = int(stats.by_level.get(str(li), 0)) + 1
 		if in_run(): run.deaths += 1
 		death_face = {"x": sim.px, "y": sim.py, "g": sim.g, "life": 1.0}
@@ -602,10 +656,14 @@ func _physics_process(_delta: float) -> void:
 		elif not sim.respawn():
 			load_level(li)
 	elif res == "win":
+		if practicing():
+			sfx.beep(660, 0.1, "sine", 0.08)
+			return
 		stats.clears += 1; stats.clear_ticks += sim.t
 		sfx.beep(660, 0.1, "sine", 0.08)
 		get_tree().create_timer(0.1).timeout.connect(func(): sfx.beep(990, 0.18, "sine", 0.08))
 		var had_records: bool = best.has(skey(li)) and best.has(key(li))
+		var prev_fewest: int = int(best[skey(li)]) if best.has(skey(li)) else 9999
 		if not best.has(skey(li)) or sim.shots < best[skey(li)]:
 			best[skey(li)] = sim.shots; new_fewest = true
 		if one_life():
@@ -622,6 +680,14 @@ func _physics_process(_delta: float) -> void:
 		elif not best.has(key(li)) or sim.t < best[key(li)]:
 			best[key(li)] = sim.t; ghosts[key(li)] = rec.duplicate(); new_best = true
 		beat_both = had_records and new_best and new_fewest and not one_life()
+		last_stars = 1
+		if flawless and not one_life():
+			last_stars = 2
+			if had_records and sim.shots <= int(prev_fewest): last_stars = 3
+		if not one_life():
+			var sk := "st:" + key(li)
+			best[sk] = maxi(int(best.get(sk, 0)), last_stars)
+		star_li = -1
 		if in_run(): _run_level_won()
 		start_celebration()
 		_save()
@@ -778,6 +844,8 @@ func _draw() -> void:
 		_draw_stats()
 	elif view == "settings":
 		_draw_settings()
+	elif view == "pause":
+		_draw_pause()
 	elif view == "demo_end":
 		_draw_demo_end()
 
@@ -1012,7 +1080,12 @@ func _draw_world() -> void:
 	if sim.phased:
 		glow(p, 11, C_PURPLE); draw_circle(p, 11, Color(Color("#c9b3ff"), 0.55))
 	else:
-		glow(p, 11, Color("#7aa2ff")); draw_circle(p, 11, C_TEXT)
+		var body: Color = SKINS[skin][1]
+		var gl: Color = SKINS[skin][2]
+		if skin == SKINS.size() - 1:   # Rainbow
+			gl = Color.from_hsv(fposmod(now * 0.25, 1.0), 0.6, 1.0)
+			body = Color.from_hsv(fposmod(now * 0.25, 1.0), 0.15, 1.0)
+		glow(p, 11, gl); draw_circle(p, 11, body)
 	_draw_eyes(p, now)
 	_draw_death_face()
 	for i in sim.ammo_max:
@@ -1167,6 +1240,7 @@ func _draw_hud() -> void:
 		text("shots %d   fewest run %s" % [god.shots + (0 if sim.done else sim.shots), str(best["god:shots"]) if best.has("god:shots") else "—"], W - 34, 58, 13, C_SHOT, "r", true)
 	else:
 		text("%s   best %s   deaths %d" % [fmt(sim.t), fmt(best[key(li)]) if best.has(key(li)) else "—", deaths], W - 34, 39, 15, Color("#c6cde8"), "r", true)
+		if practicing(): text("PRACTICE", W - 34, 80, 12, C_ORB, "r", true)
 		text("shots %d   fewest %s" % [sim.shots, str(best[skey(li)]) if best.has(skey(li)) else "—"], W - 34, 58, 13, C_SHOT, "r", true)
 	if not sim.done and (sim.phased or sim.g < 0):
 		if sim.phased and sim.g < 0:
@@ -1222,6 +1296,11 @@ func _draw_cursor() -> void:
 
 func _draw_done() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.78))
+	if practicing():
+		text("PRACTICE CLEAR", W / 2, 200, 26, C_ORB, "c", true)
+		text("%s  ·  %d shot%s  ·  nothing saved" % [fmt(sim.t), sim.shots, "" if sim.shots == 1 else "s"], W / 2, 250, 17, C_SUB, "c", true)
+		button("Retry (R)", BTN_RETRY); button("Levels (L)", BTN_LEVELS); button("Next (N)", BTN_NEXT)
+		return
 	if one_life():
 		if god.finished:
 			text("GOD MODE CLEARED", W / 2, 200, 22, C_ORB, "c", true)
@@ -1251,6 +1330,8 @@ func _draw_done() -> void:
 	text("%d shot%s" % [sh, "" if sh == 1 else "s"], W / 2 + 110, 235, 44, C_GOAL if new_fewest else C_SHOT, "c", true)
 	text("NEW BEST TIME" if new_best else "best %s" % fmt(best[key(li)]), W / 2 - 110, 262, 13, C_SUB, "c", true)
 	text("NEW FEWEST SHOTS" if new_fewest else "fewest %s" % str(best[skey(li)]), W / 2 + 110, 262, 13, C_SUB, "c", true)
+	var star_txt: String = ["", "CLEARED", "FLAWLESS: no deaths", "PERFECT: flawless and no more shots than your best"][last_stars]
+	text("★".repeat(last_stars) + "  " + star_txt, W / 2, 292, 16, C_ORB, "c", true)
 	button("Retry (R)", BTN_RETRY); button("Levels (L)", BTN_LEVELS); button("Next (N)", BTN_NEXT)
 
 
@@ -1306,7 +1387,9 @@ func _draw_menu() -> void:
 		var bs = best.get(skey(i), null)
 		if bt != null and bs != null:
 			text("%s  %d shots" % [fmt(bt), int(bs)], b.get_center().x, b.position.y + 42, 10, C_GOAL)
-	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  best time  and  fewest shots"
+		var st := int(best.get("st:" + key(i), 0))
+		if st > 0: text("★".repeat(st), b.end.x - 5, b.position.y + 15, 10, C_ORB, "r", true)
+	var legend := "LB / RB difficulty · D-pad pick · A play" if using_pad else "cleared levels show  best time, fewest shots and stars (★ clear · ★★ flawless · ★★★ perfect)"
 	if demo: legend = "DEMO · first %d of %d levels · the full game unlocks the rest" % [playable_total(), level_total()]
 	text(legend, W / 2, 528, 11, C_DIM)
 	draw_rect(CREDITS_BOX, C_PANEL_HI if hit(CREDITS_BOX) else C_PANEL)
@@ -1395,12 +1478,80 @@ func _draw_stats() -> void:
 
 
 ## Required attributions: music (CC BY 4.0), engine (MIT), symbol font (Bitstream Vera).
+# ---------------------------------------------------------------- pause menu
+
+func pause_rows() -> Array:
+	var rows := ["resume", "retry"]
+	if not one_life() and not in_run(): rows.append("practice")
+	rows.append_array(["settings", "menu"])
+	if FEEDBACK_URL != "": rows.append("feedback")
+	return rows
+
+
+func pause_rect(i: int) -> Rect2:
+	return Rect2(W / 2 - 150, 170 + i * 46, 300, 38)
+
+
+func _pause_activate(i: int) -> void:
+	match pause_rows()[i]:
+		"resume": view = "play"
+		"retry":
+			view = "play"
+			if one_life(): start_god()
+			elif in_run() and run.finished: start_run()
+			else: load_level(li)
+		"practice":
+			practice = not practice
+			view = "play"; load_level(li)
+		"settings":
+			credits_back = "pause"; set_sel = 0; listening = ""; set_note = ""; view = "settings"
+		"menu": open_main_menu()
+		"feedback": OS.shell_open(FEEDBACK_URL)
+	sfx.beep(520, 0.05, "triangle", 0.05)
+
+
+func _pause_click() -> void:
+	var rows := pause_rows()
+	for i in rows.size():
+		if hit(pause_rect(i)): pause_sel = i; _pause_activate(i); return
+	view = "play"   # click outside the buttons resumes
+
+
+func _pause_key(code: int) -> void:
+	var n := pause_rows().size()
+	match code:
+		KEY_ESCAPE: view = "play"
+		KEY_UP: pause_sel = posmod(pause_sel - 1, n)
+		KEY_DOWN: pause_sel = posmod(pause_sel + 1, n)
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: _pause_activate(pause_sel)
+
+
+func _draw_pause() -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.86))
+	text("PAUSED", W / 2, 110, 30, C_TEXT, "c", true)
+	var rows := pause_rows()
+	for i in rows.size():
+		var r := pause_rect(i)
+		var on := hit(r) or i == pause_sel
+		draw_rect(r, C_PANEL_HI if on else C_PANEL)
+		var label := ""
+		match rows[i]:
+			"resume": label = "Resume"
+			"retry": label = "Retry"
+			"practice": label = "Practice mode: ON (tap to turn off)" if practice else "Practice mode (infinite shots)"
+			"settings": label = "Settings"
+			"menu": label = "Main menu"
+			"feedback": label = "Send feedback"
+		text(label, r.get_center().x, r.position.y + 25, 15, C_ORB if rows[i] == "practice" and practice else C_TEXT, "c", true)
+	text("Esc resumes.  Practice mode saves no records or stats.", W / 2, 170 + rows.size() * 46 + 16, 12, C_DIM, "c")
+
+
 # ---------------------------------------------------------------- settings (accessibility + controls)
 
-const SET_ROWS := ["flash", "contrast", "hints", "key:fire", "key:retry", "key:next", "key:back", "key:levels", "key:run", "reset", "back"]
+const SET_ROWS := ["flash", "contrast", "hints", "skin", "key:fire", "key:retry", "key:next", "key:back", "key:levels", "key:run", "reset", "back"]
 
 func set_row_rect(i: int) -> Rect2:
-	return Rect2(210, 100 + i * 34 + (18 if i >= 3 else 0) + (14 if i >= 9 else 0), 540, 28)
+	return Rect2(210, 96 + i * 30 + (16 if i >= 4 else 0) + (12 if i >= 10 else 0), 540, 25)
 
 
 func _key_name(code: int) -> String:
@@ -1413,6 +1564,10 @@ func _settings_activate(i: int) -> void:
 	if id == "flash": reduce_flash = not reduce_flash; shake = 0.0
 	elif id == "contrast": hc_hazards = not hc_hazards
 	elif id == "hints": hints_seen = {}; toast = {}; hint_queue = []
+	elif id == "skin":
+		for k in range(1, SKINS.size() + 1):   # next unlocked colour
+			var n := (skin + k) % SKINS.size()
+			if skin_unlocked(n): skin = n; break
 	elif id.begins_with("key:"): listening = id.substr(4); set_note = "Press a key for \"%s\"  (Esc cancels)" % listening
 	elif id == "reset":
 		keys = {"fire": KEY_SPACE, "retry": KEY_R, "next": KEY_N, "back": KEY_B, "levels": KEY_L, "run": KEY_F}
@@ -1453,8 +1608,8 @@ func _settings_key(code: int) -> void:
 func _draw_settings() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.06, 0.08, 0.97))
 	text("SETTINGS", W / 2, 66, 28, C_TEXT, "c", true)
-	text("ACCESSIBILITY", 210, 94, 11, C_DIM, "l")
-	text("CONTROLS  (click a row, then press the new key)", 210, 100 + 34 * 3 + 18 - 6, 11, C_DIM, "l")
+	text("ACCESSIBILITY", 210, 90, 11, C_DIM, "l")
+	text("CONTROLS  (click a row, then press the new key)", 210, 96 + 30 * 4 + 16 - 5, 11, C_DIM, "l")
 	for i in SET_ROWS.size():
 		var id: String = SET_ROWS[i]
 		var r := set_row_rect(i)
@@ -1467,6 +1622,13 @@ func _draw_settings() -> void:
 			label = "Reduce flashing & shake"; value = "ON" if reduce_flash else "off"; vcol = C_GOAL if reduce_flash else C_DIM
 		elif id == "contrast":
 			label = "High-contrast hazards"; value = "ON" if hc_hazards else "off"; vcol = C_GOAL if hc_hazards else C_DIM
+		elif id == "skin":
+			label = "Ball colour"
+			var nxt := -1
+			for k in SKINS.size():
+				if not skin_unlocked(k): nxt = k; break
+			value = SKINS[skin][0] + ("" if nxt < 0 else "   (next: %s at %d cleared)" % [SKINS[nxt][0], SKINS[nxt][3]])
+			vcol = SKINS[skin][2] if skin != SKINS.size() - 1 else C_ORB
 		elif id == "hints":
 			label = "Replay coaching tips"; value = "%d / %d seen" % [hints_seen.size(), HINTS.size()]
 		elif id.begins_with("key:"):
@@ -1477,8 +1639,8 @@ func _draw_settings() -> void:
 			vcol = C_ORB if listening == k else C_TEXT
 		elif id == "reset": label = "Reset keys to default"
 		else: label = "Back"
-		text(label, r.position.x + 14, r.position.y + 19, 14, C_TEXT, "l", true)
-		if value != "": text(value, r.end.x - 14, r.position.y + 19, 14, vcol, "r", true)
+		text(label, r.position.x + 14, r.position.y + 17, 14, C_TEXT, "l", true)
+		if value != "": text(value, r.end.x - 14, r.position.y + 17, 14, vcol, "r", true)
 	if set_note != "": text(set_note, W / 2, 522, 13, C_ORB, "c", true)
 	else: text("Up / Down + Enter, or click.   T neon · V mute · C credits · Esc are fixed keys.", W / 2, 522, 11, C_DIM, "c")
 

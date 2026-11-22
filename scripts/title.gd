@@ -71,6 +71,7 @@ func items() -> Array:
 		{"id": "neon", "label": "Neon", "value": "by " + game.neon_mode, "opt": true, "c": C_MAGENTA},
 		{"id": "stats", "label": "Career Stats", "value": "", "c": C_VIOLET},
 		{"id": "settings", "label": "Settings", "value": "", "c": C_VIOLET},
+		] + ([{"id": "feedback", "label": "Send feedback", "value": "", "c": C_VIOLET}] if game.FEEDBACK_URL != "" else []) + [
 		{"id": "credits", "label": "Credits", "value": "", "c": C_VIOLET},
 	]
 	if not OS.has_feature("web"):
@@ -134,6 +135,8 @@ func activate(i: int, dir := 1) -> void:
 		"stats":
 			game.credits_back = "main"
 			game.view = "stats"
+		"feedback":
+			OS.shell_open(game.FEEDBACK_URL)
 		"settings":
 			game.credits_back = "main"
 			game.set_sel = 0; game.listening = ""; game.set_note = ""

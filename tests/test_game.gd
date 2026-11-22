@@ -114,9 +114,11 @@ func _initialize() -> void:
 	game._process(0.016)
 	check(game.cursor_hidden, "the normal mouse pointer is hidden while playing")
 	game._unhandled_input(_key(KEY_ESCAPE))
-	check(game.view == "main", "Esc during play opens the main menu")
+	check(game.view == "pause", "Esc during play opens the pause menu")
 	game._process(0.016)
-	check(not game.cursor_hidden, "and comes back in the menu")
+	check(not game.cursor_hidden, "and the mouse pointer comes back in the pause menu")
+	game.pause_sel = game.pause_rows().find("menu"); game._unhandled_input(_key(KEY_ENTER))
+	check(game.view == "main", "pause menu: Main menu opens the title menu")
 	t._process(0.1)
 	check(game.music.current == "00_title_pink_bloom", "opening the menu mid-game brings the title song back")
 	t._unhandled_input(_key(KEY_ESCAPE))
@@ -392,13 +394,13 @@ func _initialize() -> void:
 	check(game.reduce_flash, "Settings: Enter toggles reduce flashing on")
 	game.set_sel = 1; game._unhandled_input(_key(KEY_ENTER))
 	check(game.hc_hazards, "Settings: Enter toggles high-contrast hazards on")
-	game.set_sel = 3; game._unhandled_input(_key(KEY_ENTER))
+	game.set_sel = 4; game._unhandled_input(_key(KEY_ENTER))
 	check(game.listening == "fire", "Settings: choosing the fire row starts listening")
 	game._unhandled_input(_key(KEY_T))
 	check(game.listening == "fire" and int(game.keys.fire) == KEY_SPACE, "Settings: reserved keys (T) are refused")
 	game._unhandled_input(_key(KEY_X))
 	check(game.listening == "" and int(game.keys.fire) == KEY_X, "Settings: fire is rebound to X")
-	game.set_sel = 4; game._unhandled_input(_key(KEY_ENTER)); game._unhandled_input(_key(KEY_X))
+	game.set_sel = 5; game._unhandled_input(_key(KEY_ENTER)); game._unhandled_input(_key(KEY_X))
 	check(int(game.keys.retry) == KEY_X and int(game.keys.fire) == KEY_R, "Settings: taking a used key swaps the two actions")
 	game._unhandled_input(_key(KEY_ESCAPE))
 	check(game.view == "play", "Settings: Esc returns where it came from")
@@ -406,9 +408,49 @@ func _initialize() -> void:
 	game.aim = Vector2(game.sim.px + 100, game.sim.py - 100)
 	game._unhandled_input(_key(KEY_R))
 	check(game.sim.shots == shots_before + 1, "the rebound fire key (R) fires")
-	game.view = "settings"; game.set_sel = 9; game._unhandled_input(_key(KEY_ENTER)); game.view = "play"
+	game.view = "settings"; game.set_sel = 10; game._unhandled_input(_key(KEY_ENTER)); game.view = "play"
 	check(int(game.keys.fire) == KEY_SPACE and int(game.keys.retry) == KEY_R, "Settings: reset restores the default keys")
 	game.reduce_flash = false; game.hc_hazards = false
+
+	# ---- pause menu, practice mode, stars, ball colours
+	game.set_diff("medium"); game.run.on = false; game.practice = false; game.load_level(0); game.view = "play"
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "pause", "Esc during play opens the pause menu")
+	var px0: float = game.sim.px
+	ticks(30)
+	check(game.sim.t == 0 and game.sim.px == px0, "the game is frozen while paused")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	check(game.view == "play", "Esc again resumes")
+	game.view = "pause"; game.pause_sel = game.pause_rows().find("practice"); game._unhandled_input(_key(KEY_ENTER))
+	check(game.practice and game.view == "play", "pause menu: Practice turns practice mode on and restarts the level")
+	game.aim = Vector2(game.sim.px + 100, game.sim.py - 60)
+	game.best = {}
+	var clears0: int = game.stats.clears; var shots0: int = game.stats.shots
+	for i in 6: game.press()
+	check(game.sim.shots == 6 and game.sim.ammo > 0, "practice mode: shots are unlimited")
+	check(game.stats.shots == shots0, "practice mode: shots are not counted in career stats")
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0
+	ticks(3)
+	check(game.sim.done and game.stats.clears == clears0 and not game.best.has("st:" + game.key(0)), "practice clear saves nothing")
+	game.practice = false; game.load_level(0)
+	game.best = {}
+	game.flawless = true
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0; game.sim.started = true
+	ticks(3)
+	check(game.last_stars == 2 and int(game.best["st:" + game.key(0)]) == 2, "a first flawless clear earns 2 stars (3 needs a record to match)")
+	game.load_level(0); game.flawless = true; game.sim.shots = 0
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0; game.sim.started = true
+	ticks(3)
+	check(game.last_stars == 3, "flawless again with no more shots than your fewest earns 3 stars")
+	game.load_level(0); game.flawless = false
+	game.sim.px = game.sim.L.goal[0]; game.sim.py = game.sim.L.goal[1]; game.sim.vx = 0.0; game.sim.vy = 0.0; game.sim.started = true
+	ticks(3)
+	check(game.last_stars == 1 and int(game.best["st:" + game.key(0)]) == 3, "after dying a clear is 1 star, and the best stars are kept")
+	game.best = {}
+	check(game.cleared_levels() == 0 and not game.skin_unlocked(1) and game.skin_unlocked(0), "ball colours: only Classic at the start")
+	for i in 5: game.best["medium:%d" % i] = 1000
+	check(game.cleared_levels() == 5 and game.skin_unlocked(1) and not game.skin_unlocked(2), "ball colours: Mint unlocks at 5 levels cleared")
+	game.best = {}; game.load_level(0)
 
 	# ---- coaching tips
 	game.hints_seen = {}; game.toast = {}; game.set_diff("medium"); game.load_level(0); game.view = "play"

@@ -102,6 +102,14 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   tips the first time a situation happens: gravity arc (first shot on level 1), chain (fire the same way mid-air),
   brake (fire against your motion), bounce (a wall/floor bounce). Detected from velocity only, never touches the sim.
   Settings → "Replay coaching tips" clears them. Level 1 and 4 tips (build_levels.py) also teach arc and chaining.
+- **Pause menu** (Esc during play, view `"pause"`): Resume, Retry, Practice, Settings, Main menu (+ Send feedback when
+  `FEEDBACK_URL` in game.gd is set; empty now, set it to a Discord/form link). Menus freeze the sim, so Full Run time pauses.
+- **Practice mode** (`practice`, only outside Full Run/God): infinite shots, no records, no career stats, no stars.
+- **Stars** (`best["st:"+key]`, shown on the level grid and clear screen): 1 cleared, 2 flawless (no deaths since you
+  started the level; `flawless`/`star_li`), 3 flawless AND shots <= your previous fewest (needs an earlier record).
+  Not computed in God Mode. These replace par; no bot involved.
+- **Ball colours** (`SKINS`, Settings → Ball colour, saved as `skin`): unlocked by how many different levels you have
+  cleared on any difficulty (0/5/15/25/40/60).
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
