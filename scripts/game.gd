@@ -422,8 +422,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		aim = e.position; using_pad = false
 	elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 		aim = e.position; using_pad = false; press()
-	elif e is InputEventScreenTouch and e.pressed:
-		aim = e.position; using_pad = false; press()
+	# A phone tap arrives as BOTH a touch and an emulated mouse click. Only the mouse click is used,
+	# otherwise one tap fires two blasts. (Godot's "emulate mouse from touch" setting stays on.)
 	elif e is InputEventKey and e.pressed and not e.echo:
 		if view == "settings":
 			_settings_key(e.keycode)

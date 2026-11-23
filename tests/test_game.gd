@@ -452,6 +452,15 @@ func _initialize() -> void:
 	check(game.cleared_levels() == 5 and game.skin_unlocked(1) and not game.skin_unlocked(2), "ball colours: Mint unlocks at 5 levels cleared")
 	game.best = {}; game.load_level(0)
 
+	# ---- phone taps: a tap is a touch AND an emulated mouse click, but must fire only one blast
+	game.set_diff("medium"); game.run.on = false; game.practice = false; game.load_level(0); game.view = "play"
+	var tap_shots: int = game.sim.shots
+	var tp := InputEventScreenTouch.new(); tp.pressed = true; tp.position = Vector2(300, 300)
+	var mb := InputEventMouseButton.new(); mb.pressed = true; mb.button_index = MOUSE_BUTTON_LEFT; mb.position = Vector2(300, 300)
+	game._unhandled_input(tp); game._unhandled_input(mb)
+	check(game.sim.shots == tap_shots + 1, "one phone tap (touch + emulated click) fires exactly one blast")
+	game.load_level(0)
+
 	# ---- coaching tips
 	game.hints_seen = {}; game.toast = {}; game.set_diff("medium"); game.load_level(0); game.view = "play"
 	game.aim = Vector2(game.sim.px + 200, game.sim.py - 120); game.press()

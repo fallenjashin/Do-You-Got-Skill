@@ -190,13 +190,13 @@ func _unhandled_input(e: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 	if game.view == "splash":
 		var skip: bool = (e is InputEventKey and e.pressed and not e.echo) or (e is InputEventMouseButton and e.pressed) \
-			or (e is InputEventJoypadButton and e.pressed) or (e is InputEventScreenTouch and e.pressed)
+			or (e is InputEventJoypadButton and e.pressed)
 		if skip and splash_t > 0.15:
 			game.view = "title"
 		return
 	if game.view == "title":
 		var pressed: bool = (e is InputEventKey and e.pressed and not e.echo) or (e is InputEventMouseButton and e.pressed) \
-			or (e is InputEventJoypadButton and e.pressed) or (e is InputEventScreenTouch and e.pressed)
+			or (e is InputEventJoypadButton and e.pressed)
 		if pressed:
 			open_main()
 			game.sfx.beep(330, 0.25, "sine", 0.06, 990)

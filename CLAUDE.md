@@ -110,6 +110,9 @@ Export templates (for web/Windows builds): the `Godot_v4.7.2-stable_export_templ
   Not computed in God Mode. These replace par; no bot involved.
 - **Ball colours** (`SKINS`, Settings → Ball colour, saved as `skin`): unlocked by how many different levels you have
   cleared on any difficulty (0/5/15/25/40/60).
+- **Touch input:** a phone tap arrives as a touch event AND an emulated mouse click, so game.gd/title.gd react to the
+  mouse click only (never `InputEventScreenTouch`), else one tap fires two blasts. `emulate_mouse_from_touch` must stay on.
+  Phone limitations: no Esc/R keys, so use the "Levels" button; the pause menu and retry are keyboard-only for now.
 - `tools/marketing/`: Steam asset tools. `make_capsules.py <outdir>` (capsule art), `best_run.js` (records
   short winning runs), `trailer.gd` (replays them in movie mode for the trailer and screenshots).
   Store copy and checklist: `marketing/STEAM_STORE_COPY.md`.
