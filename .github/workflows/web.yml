@@ -7,10 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege: the build job (which runs downloaded tools and pip packages) can only read the repo.
+# Only the deploy job may publish to Pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -28,9 +28,12 @@ jobs:
 
       - name: Install Godot and the web export template
         run: |
+          # Checksums are the official SHA512-SUMS.txt values for this release: a swapped download fails the build.
           curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/Godot_v${GODOT_VERSION}_linux.x86_64.zip
+          echo "9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65  godot.zip" | sha512sum -c -
           unzip -q godot.zip && mv Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
           curl -sSL -o templates.tpz https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/Godot_v${GODOT_VERSION}_export_templates.tpz
+          echo "ca4d71c4d7b81dfc15d1a98baa07534aa95b03fdda78a0075b06672e1648d2e5f40980c9adc28d23e1b92e732ee7bf3461997aa804af74ec2fcd7a93ccb84079  templates.tpz" | sha512sum -c -
           mkdir -p ~/.local/share/godot/export_templates/$TEMPLATE_DIR
           unzip -q -j templates.tpz templates/version.txt templates/web_nothreads_release.zip -d ~/.local/share/godot/export_templates/$TEMPLATE_DIR
           rm templates.tpz godot.zip
@@ -58,7 +61,7 @@ jobs:
       # with no errors. Nothing is published if this fails.
       - name: Browser smoke test
         run: |
-          pip install --quiet playwright
+          pip install --quiet playwright==1.63.0
           mkdir -p smoke
           python3 tools/web/smoke.py build/web smoke
 
@@ -77,6 +80,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

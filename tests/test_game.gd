@@ -461,6 +461,20 @@ func _initialize() -> void:
 	check(game.sim.shots == tap_shots + 1, "one phone tap (touch + emulated click) fires exactly one blast")
 	game.load_level(0)
 
+	# ---- a corrupt or hostile save file must never crash the game
+	var bad := FileAccess.open("user://bad_save.json", FileAccess.WRITE)
+	bad.store_string('{"best": 7, "diff": 5, "neon": [], "music": "loud", "music_on": {}, "skin": "x", "keys": {"fire": "z", "retry": -4}, "stats": {"ticks": {}, "deaths": "many", "by_level": 3}, "last": [1], "hints": 4}')
+	bad.close()
+	game.save_path = "user://bad_save.json"
+	game._load_save()
+	check(game.skin == 0 and int(game.keys.fire) == KEY_SPACE and game.music_volume >= 0.0 and game.music_volume <= 1.0, "a save full of wrong types loads without crashing and keeps defaults")
+	var bad2 := FileAccess.open("user://bad_save.json", FileAccess.WRITE)
+	bad2.store_string('this is not json {{{')
+	bad2.close()
+	game._load_save()
+	check(true, "a save that is not JSON at all does not crash the game")
+	game.save_path = "user://shot_test_save.json"
+
 	# ---- coaching tips
 	game.hints_seen = {}; game.toast = {}; game.set_diff("medium"); game.load_level(0); game.view = "play"
 	game.aim = Vector2(game.sim.px + 200, game.sim.py - 120); game.press()

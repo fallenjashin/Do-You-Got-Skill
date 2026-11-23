@@ -170,14 +170,20 @@ func _load_save() -> void:
 		return
 	var parsed = JSON.parse_string(FileAccess.open(save_path, FileAccess.READ).get_as_text())
 	if parsed is Dictionary:
-		best = parsed.get("best", {})
-		if parsed.get("diff", "") in DIFFS: diff = parsed.diff
-		if parsed.get("neon", "") in ["difficulty", "world"]: neon_mode = parsed.neon
-		if parsed.has("music"): music_volume = clampf(float(parsed.music), 0.0, 1.0)
-		music_unmuted = clampf(float(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7)), 0.01, 1.0)
-		reduce_flash = bool(parsed.get("reduce_flash", false))
-		hc_hazards = bool(parsed.get("hc_hazards", false))
-		skin = clampi(int(parsed.get("skin", 0)), 0, SKINS.size() - 1)
+		# A save file is untrusted input (hand-edited, half-written, or from another version): check every
+		# type so a bad file can never crash the game at startup; bad values fall back to defaults.
+		var b = parsed.get("best", {})
+		if b is Dictionary:
+			for k in b:
+				var v = b[k]
+				if v is int or v is float or v is Array: best[str(k)] = v
+		if str(parsed.get("diff", "")) in DIFFS: diff = str(parsed.diff)
+		if str(parsed.get("neon", "")) in ["difficulty", "world"]: neon_mode = str(parsed.neon)
+		if parsed.has("music"): music_volume = clampf(_num(parsed.music, 0.7), 0.0, 1.0)
+		music_unmuted = clampf(_num(parsed.get("music_on", music_volume if music_volume > 0.0 else 0.7), 0.7), 0.01, 1.0)
+		reduce_flash = parsed.get("reduce_flash", false) == true
+		hc_hazards = parsed.get("hc_hazards", false) == true
+		skin = clampi(int(_num(parsed.get("skin", 0), 0)), 0, SKINS.size() - 1)
 		var hs = parsed.get("hints", null)
 		if hs is Dictionary:
 			for k in hs:
@@ -185,15 +191,20 @@ func _load_save() -> void:
 		var ks = parsed.get("keys", null)
 		if ks is Dictionary:
 			for k in keys:
-				if ks.has(k) and int(ks[k]) > 0: keys[k] = int(ks[k])
+				if ks.has(k) and int(_num(ks[k], 0)) > 0: keys[k] = int(_num(ks[k], 0))
 		var st = parsed.get("stats", null)
 		if st is Dictionary:
 			for k in ["ticks", "deaths", "shots", "clears", "clear_ticks", "runs"]:
-				stats[k] = int(st.get(k, 0))
+				stats[k] = maxi(0, int(_num(st.get(k, 0), 0)))
 			var bl = st.get("by_level", {})
 			if bl is Dictionary:
-				for k in bl: stats.by_level[str(k)] = int(bl[k])
-		if parsed.has("last"): last_level = clampi(int(parsed.last), 0, playable_total() - 1)
+				for k in bl: stats.by_level[str(k)] = maxi(0, int(_num(bl[k], 0)))
+		if parsed.has("last"): last_level = clampi(int(_num(parsed.last, 0)), 0, playable_total() - 1)
+
+
+## A number from untrusted data: ints and floats pass, everything else (null, text, lists) is the default.
+func _num(v, default: float) -> float:
+	return float(v) if (v is int or v is float) and is_finite(float(v)) else default
 
 
 ## The project used to be called "Recoil", and Godot keeps user:// in a folder named after the
